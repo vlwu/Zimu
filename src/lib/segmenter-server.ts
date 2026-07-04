@@ -23,7 +23,11 @@ function getDictionary(): Record<string, DictionaryEntry> {
   return cachedDict!;
 }
 
-export function segmentChinese(text: string): Token[] {
+export function segmentChinese(text: string | null | undefined): Token[] {
+  if (!text) {
+    return [];
+  }
+
   const dict = getDictionary();
   const tokens: Token[] = [];
   let i = 0;
