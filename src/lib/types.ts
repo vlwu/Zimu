@@ -5,3 +5,19 @@ export interface Token {
   hsk?: number | null;
   isWord: boolean;
 }
+
+export interface ComprehensionQuestion {
+  question: string;
+  options: string[];
+  answerIndex: number;
+  explanation: string;
+}
+
+export interface StoryData {
+  storyId: string;
+  title: string;
+  translation: string;
+  tokens: Token[];
+  newWords: string[];
+  comprehensionQuestions?: ComprehensionQuestion[];
+}

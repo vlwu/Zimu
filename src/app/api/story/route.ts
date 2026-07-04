@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
 import { db } from '@/lib/firebase-admin';
 import { segmentChinese } from '@/lib/segmenter-server';
+import { Token, ComprehensionQuestion } from '@/lib/types';
 
 // Initialize the Gemini client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -54,7 +55,8 @@ export async function POST(request: Request) {
         title: foundCachedStory.title,
         translation: foundCachedStory.translation,
         tokens: segmentedTokens,
-        newWords: foundCachedStory.newWords || []
+        newWords: foundCachedStory.newWords || [],
+        comprehensionQuestions: foundCachedStory.comprehensionQuestions || []
       });
     }
 
@@ -70,9 +72,9 @@ export async function POST(request: Request) {
     const maxAttempts = 4; // 1 initial generation + up to 3 validation retries
 
     let storyData: any = null;
-    let segmentedTokens: any[] = [];
+    let segmentedTokens: Token[] = [];
 
-    // System instruction calibrated with known-word boundaries
+    // System instruction calibrated with known-word boundaries and quizzes
     const systemInstruction = `
       # Role
       You are an expert Chinese language teacher specializing in graded readers for HSK learners.
@@ -89,6 +91,14 @@ export async function POST(request: Request) {
         3. Are essential to the story rather than arbitrarily inserted (use them because they naturally fit, not just to hit the quota).
       - Do not use any vocabulary from HSK levels ABOVE ${hskLevelParsed}.
 
+      # Comprehension Questions (strict)
+      Generate exactly 3 multiple-choice comprehension questions based on the story.
+      Each question must contain:
+      1. "question": A clear question in Simplified Chinese appropriate for this level.
+      2. "options": Exactly 4 Chinese text options.
+      3. "answerIndex": The 0-based index of the correct answer (0, 1, 2, or 3).
+      4. "explanation": A brief, helpful explanation in English of why the selected answer is correct.
+
       # Quality Bar
       - The story must read naturally and coherently, as if written for native graded-reader materials — never force or twist the plot just to satisfy a vocabulary boundary.
       - Prefer simple, clear sentence structures appropriate for HSK ${hskLevelParsed} grammar patterns.
@@ -99,8 +109,7 @@ export async function POST(request: Request) {
       - Total length: 80-150 Chinese characters (count characters, not words; punctuation does not count toward this total).
 
       # Output Format
-      - Return ONLY the story text in Simplified Chinese.
-      - Do not include pinyin, translations, titles, explanations, or any commentary before or after the story.
+      - Return ONLY the requested JSON format matching the schema.
     `;
 
     while (attempts < maxAttempts) {
@@ -127,9 +136,27 @@ export async function POST(request: Request) {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
                 description: 'The 3-6 new HSK vocabulary words introduced in the story'
+              },
+              comprehensionQuestions: {
+                type: Type.ARRAY,
+                description: 'Exactly 3 multiple-choice comprehension questions about the story',
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    question: { type: Type.STRING, description: 'The question in Simplified Chinese' },
+                    options: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: 'Exactly 4 option choices'
+                    },
+                    answerIndex: { type: Type.INTEGER, description: '0-based index of the correct option' },
+                    explanation: { type: Type.STRING, description: 'English explanation of the correct answer' }
+                  },
+                  required: ['question', 'options', 'answerIndex', 'explanation']
+                }
               }
             },
-            required: ['title', 'storyText', 'translation', 'newWordsIntroduced']
+            required: ['title', 'storyText', 'translation', 'newWordsIntroduced', 'comprehensionQuestions']
           }
         }
       });
@@ -178,6 +205,7 @@ export async function POST(request: Request) {
       translation: storyData.translation,
       targetLevel: hskLevelParsed,
       newWords: storyData.newWordsIntroduced,
+      comprehensionQuestions: storyData.comprehensionQuestions || [],
       createdAt: new Date().toISOString()
     });
     const newStoryId = newStoryRef.id;
@@ -192,7 +220,8 @@ export async function POST(request: Request) {
       title: storyData.title,
       translation: storyData.translation,
       tokens: segmentedTokens,
-      newWords: storyData.newWordsIntroduced
+      newWords: storyData.newWordsIntroduced,
+      comprehensionQuestions: storyData.comprehensionQuestions || []
     });
 
   } catch (error: any) {
