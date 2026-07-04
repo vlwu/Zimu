@@ -1,16 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Token } from '@/lib/types';
 import { useUserProgress } from '@/context/UserProgressContext';
 
 export default function HomeReaderPage() {
+  const router = useRouter();
   const {
     userId,
     targetHskLevel,
     addKnownWord,
     updateTargetHskLevel,
     loading: userProgressLoading,
+    logout,
   } = useUserProgress();
 
   const [showPinyin, setShowPinyin] = useState(true);
@@ -22,7 +25,15 @@ export default function HomeReaderPage() {
     tokens: Token[];
   } | null>(null);
 
+  // Client-side route guard: redirect if loading is finished and no user exists
+  useEffect(() => {
+    if (!userProgressLoading && !userId) {
+      router.push('/login');
+    }
+  }, [userId, userProgressLoading, router]);
+
   const fetchNewStory = async () => {
+    if (!userId) return;
     setLoading(true);
     try {
       const res = await fetch('/api/story', {
@@ -51,7 +62,7 @@ export default function HomeReaderPage() {
     setActiveToken(null);
   };
 
-  if (userProgressLoading) {
+  if (userProgressLoading || !userId) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -76,7 +87,7 @@ export default function HomeReaderPage() {
                 id="hsk-select"
                 value={targetHskLevel}
                 onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
-                className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition cursor-pointer font-medium"
+                className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition cursor-pointer font-medium text-gray-900"
               >
                 <option value={1}>HSK 1</option>
                 <option value={2}>HSK 2</option>
@@ -85,16 +96,22 @@ export default function HomeReaderPage() {
             </div>
             <button
               onClick={() => setShowPinyin(!showPinyin)}
-              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition font-medium"
+              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition font-medium cursor-pointer"
             >
               {showPinyin ? 'Hide Pinyin' : 'Show Pinyin'}
             </button>
             <button
               onClick={fetchNewStory}
               disabled={loading}
-              className="px-4 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition font-medium"
+              className="px-4 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition font-medium cursor-pointer"
             >
               {loading ? 'Generating...' : 'Next Story'}
+            </button>
+            <button
+              onClick={logout}
+              className="px-3 py-1 text-sm bg-red-50 hover:bg-red-100 text-red-600 rounded-md transition font-medium cursor-pointer"
+            >
+              Logout
             </button>
           </div>
         </header>
@@ -143,7 +160,7 @@ export default function HomeReaderPage() {
             <button
               onClick={fetchNewStory}
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+              className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer"
             >
               {loading ? 'Generating your story...' : 'Generate First Story'}
             </button>
@@ -160,7 +177,7 @@ export default function HomeReaderPage() {
             </div>
             <button
               onClick={() => setActiveToken(null)}
-              className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              className="text-gray-400 hover:text-gray-600 text-2xl font-bold cursor-pointer"
             >
               &times;
             </button>
@@ -173,7 +190,7 @@ export default function HomeReaderPage() {
           <div className="flex gap-3 mt-4">
             <button
               onClick={() => markWordAsKnown(activeToken.text)}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 px-4 rounded-xl transition"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 px-4 rounded-xl transition cursor-pointer"
             >
               I know this word
             </button>

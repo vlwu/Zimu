@@ -6,18 +6,19 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, isFirebaseConfigured } from '@/lib/firebase-client';
 
 interface UserProgressContextType {
-  userId: string;
+  userId: string | null;
   knownWords: string[];
   targetHskLevel: number;
   loading: boolean;
   addKnownWord: (word: string) => Promise<void>;
   updateTargetHskLevel: (level: number) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
 
 export function UserProgressProvider({ children }: { children: React.ReactNode }) {
-  const [userId, setUserId] = useState<string>('test-user-id');
+  const [userId, setUserId] = useState<string | null>(null);
   const [knownWords, setKnownWords] = useState<string[]>([]);
   const [targetHskLevel, setTargetHskLevel] = useState<number>(3);
   const [loading, setLoading] = useState<boolean>(true);
@@ -26,13 +27,15 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!isFirebaseConfigured) {
       setUserId('test-user-id');
+      setLoading(false);
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserId(user.uid);
       } else {
-        setUserId('test-user-id');
+        setUserId(null);
+        setLoading(false);
       }
     });
     return () => unsubscribe();
@@ -40,6 +43,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
 
   // Fetch or initialize user document when userId changes
   useEffect(() => {
+    if (userId === null) {
+      setKnownWords([]);
+      setTargetHskLevel(3);
+      setLoading(false);
+      return;
+    }
+
     async function fetchUserProgress() {
       setLoading(true);
       if (!isFirebaseConfigured) {
@@ -51,7 +61,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       }
 
       try {
-        const docRef = doc(db, 'users', userId);
+        const docRef = doc(db, 'users', userId!);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
@@ -78,6 +88,8 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   }, [userId]);
 
   const addKnownWord = async (word: string) => {
+    if (!userId) return;
+
     // Optimistic UI update
     setKnownWords((prev) => {
       if (prev.includes(word)) return prev;
@@ -101,6 +113,8 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   };
 
   const updateTargetHskLevel = async (level: number) => {
+    if (!userId) return;
+
     // Optimistic UI update
     setTargetHskLevel(level);
 
@@ -118,6 +132,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const logout = async () => {
+    if (isFirebaseConfigured) {
+      await auth.signOut();
+    }
+    setUserId(null);
+  };
+
   return (
     <UserProgressContext.Provider
       value={{
@@ -127,6 +148,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         loading,
         addKnownWord,
         updateTargetHskLevel,
+        logout,
       }}
     >
       {children}
