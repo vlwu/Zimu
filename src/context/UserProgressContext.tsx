@@ -13,6 +13,7 @@ interface UserProgressContextType {
   addKnownWord: (word: string) => Promise<void>;
   updateTargetHskLevel: (level: number) => Promise<void>;
   logout: () => Promise<void>;
+  loginDemo: () => void;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
@@ -139,6 +140,11 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     setUserId(null);
   };
 
+  const loginDemo = () => {
+    setUserId('test-user-id');
+    setLoading(false);
+  };
+
   return (
     <UserProgressContext.Provider
       value={{
@@ -149,6 +155,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         addKnownWord,
         updateTargetHskLevel,
         logout,
+        loginDemo,
       }}
     >
       {children}

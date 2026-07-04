@@ -8,7 +8,7 @@ import { useUserProgress } from '@/context/UserProgressContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { userId, loading } = useUserProgress();
+  const { userId, loading, loginDemo } = useUserProgress();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -28,6 +28,7 @@ export default function LoginPage() {
 
     if (!isFirebaseConfigured) {
       setError('Firebase is not configured. Redirecting to demo mode...');
+      loginDemo();
       router.push('/');
       setAuthLoading(false);
       return;
@@ -97,8 +98,11 @@ export default function LoginPage() {
             <p className="font-semibold mb-2">⚠️ Local Demo Mode Active</p>
             <p className="mb-4">Firebase environment variables are not configured. You can use the app immediately with a mock profile.</p>
             <button
-              onClick={() => router.push('/')}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition text-center"
+              onClick={() => {
+                loginDemo();
+                router.push('/');
+              }}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition text-center cursor-pointer"
             >
               Enter Demo Mode
             </button>
