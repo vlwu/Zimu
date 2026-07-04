@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Token, ComprehensionQuestion } from '@/lib/types';
 import { useUserProgress } from '@/context/UserProgressContext';
@@ -9,8 +9,10 @@ export default function HomeReaderPage() {
   const router = useRouter();
   const {
     userId,
+    knownWords,
     targetHskLevel,
     addKnownWord,
+    removeKnownWord,
     updateTargetHskLevel,
     loading: userProgressLoading,
     logout,
@@ -20,6 +22,7 @@ export default function HomeReaderPage() {
   const [colorCodeHsk, setColorCodeHsk] = useState(true);
   const [activeToken, setActiveToken] = useState<Token | null>(null);
   const [loading, setLoading] = useState(false);
+  const [storyLength, setStoryLength] = useState<'short' | 'medium' | 'long'>('short');
   
   const [story, setStory] = useState<{
     storyId: string;
@@ -34,14 +37,10 @@ export default function HomeReaderPage() {
   const [currentStoryIndex, setCurrentStoryIndex] = useState<number>(-1);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  // Speech and Quiz tracking states
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  // Quiz tracking states
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [isStoryCompleted, setIsStoryCompleted] = useState(false);
-
-  // TTS Ref to bypass Garbage Collection in Chromium-based browsers
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Client-side route guard: redirect if loading is finished and no user exists
   useEffect(() => {
@@ -76,20 +75,9 @@ export default function HomeReaderPage() {
     }
   }, [storyHistory, userId]);
 
-  // Clean up native speech synthesis on unmount
-  useEffect(() => {
-    return () => {
-      window.speechSynthesis.cancel();
-    };
-  }, []);
-
   const fetchNewStory = async () => {
     if (!userId) return;
     setLoading(true);
-    
-    // Stop any active TTS audio
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
 
     // Reset quiz states
     setQuizAnswers({});
@@ -103,6 +91,7 @@ export default function HomeReaderPage() {
         body: JSON.stringify({
           userId,
           targetHskLevel,
+          storyLength,
         }),
       });
       const data = await res.json();
@@ -130,8 +119,6 @@ export default function HomeReaderPage() {
     const selected = storyHistory[index];
     if (!selected) return;
 
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
     setQuizAnswers({});
     setQuizSubmitted(false);
     setIsStoryCompleted(false);
@@ -141,81 +128,55 @@ export default function HomeReaderPage() {
     setIsHistoryOpen(false); // Auto close sidebar drawer on mobile
   };
 
-  const handleSpeak = () => {
-    if (!story) return;
-
-    // Reset synthesis engine safely
-    window.speechSynthesis.cancel();
-
-    if (isSpeaking) {
-      setIsSpeaking(false);
-      return;
+  // Toggle words quickly with visual cues and tactile feedback
+  const toggleWordKnown = async (word: string) => {
+    if (knownWords.includes(word)) {
+      await removeKnownWord(word);
+    } else {
+      await addKnownWord(word);
     }
-
-    const textToSpeak = story.tokens.map(t => t.text).join('');
-    if (!textToSpeak.trim()) return;
-
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.lang = 'zh-CN';
-    utterance.rate = 0.85; // Calibrated comfort pace for learners
-
-    // Attempt to lock native Chinese voice if found locally
-    const voices = window.speechSynthesis.getVoices();
-    const chineseVoice = voices.find(v => 
-      v.lang.toLowerCase().includes('zh-cn') || 
-      v.lang.toLowerCase().includes('zh-hans') || 
-      v.lang.toLowerCase().startsWith('zh')
-    );
-    if (chineseVoice) {
-      utterance.voice = chineseVoice;
-    }
-
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      utteranceRef.current = null;
-    };
-
-    utterance.onerror = (e) => {
-      console.warn('Speech synthesis notification:', e);
-      setIsSpeaking(false);
-      utteranceRef.current = null;
-    };
-
-    // Retain object reference locally and globally to bypass GC
-    utteranceRef.current = utterance;
-    if (typeof window !== 'undefined') {
-      (window as any)._zimuActiveUtterance = utterance;
-    }
-
-    window.speechSynthesis.speak(utterance);
   };
 
-  const markWordAsKnown = async (word: string) => {
-    await addKnownWord(word);
-    setActiveToken(null);
+  const getHskBadgeColors = (level: number) => {
+    switch (level) {
+      case 1:
+        return 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/60';
+      case 2:
+        return 'bg-sky-50 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300 border-sky-200 dark:border-sky-900/60';
+      case 3:
+        return 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900/60';
+      case 4:
+        return 'bg-orange-50 dark:bg-orange-950/20 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-900/60';
+      case 5:
+        return 'bg-rose-50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-900/60';
+      case 6:
+        return 'bg-violet-50 dark:bg-violet-950/20 text-violet-800 dark:text-violet-300 border-violet-200 dark:border-violet-900/60';
+      default: // HSK 7-9 (represented by level 7)
+        return 'bg-fuchsia-50 dark:bg-fuchsia-950/20 text-fuchsia-800 dark:text-fuchsia-300 border-fuchsia-200 dark:border-fuchsia-900/60';
+    }
   };
 
-  const getHskColorClass = (hsk: number | null | undefined) => {
-    if (!hsk) return 'hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-800 dark:text-neutral-200';
+  const getHskColorClass = (hsk: number | null | undefined, isKnown: boolean) => {
+    if (!hsk) return 'hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-800 dark:text-slate-200';
+    
+    // Style marked words to fade into standard reading states
+    const opacityStyle = isKnown ? 'opacity-50 hover:opacity-100 transition duration-150 border-dotted' : 'border-b-2 font-bold';
+
     switch (hsk) {
       case 1:
-        return 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border-b-2 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30';
+        return `${opacityStyle} bg-emerald-50/50 dark:bg-emerald-950/10 text-emerald-800/90 dark:text-emerald-300/90 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30`;
       case 2:
-        return 'bg-sky-50 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300 border-b-2 border-sky-300 dark:border-sky-800 hover:bg-sky-100/70 dark:hover:bg-sky-900/30';
+        return `${opacityStyle} bg-sky-50/50 dark:bg-sky-950/10 text-sky-800/90 dark:text-sky-300/90 border-sky-300 dark:border-sky-800 hover:bg-sky-100/70 dark:hover:bg-sky-900/30`;
       case 3:
-        return 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border-b-2 border-amber-300 dark:border-amber-800 hover:bg-amber-100/70 dark:hover:bg-amber-900/30';
+        return `${opacityStyle} bg-amber-50/50 dark:bg-amber-950/10 text-amber-800/90 dark:text-amber-300/90 border-amber-300 dark:border-amber-800 hover:bg-amber-100/70 dark:hover:bg-amber-900/30`;
       case 4:
-        return 'bg-orange-50 dark:bg-orange-950/20 text-orange-800 dark:text-orange-300 border-b-2 border-orange-300 dark:border-orange-800 hover:bg-orange-100/70 dark:hover:bg-orange-900/30';
+        return `${opacityStyle} bg-orange-50/50 dark:bg-orange-950/10 text-orange-800/90 dark:text-orange-300/90 border-orange-300 dark:border-orange-800 hover:bg-orange-100/70 dark:hover:bg-orange-900/30`;
       case 5:
-        return 'bg-rose-50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300 border-b-2 border-rose-300 dark:border-rose-800 hover:bg-rose-100/70 dark:hover:bg-rose-900/30';
+        return `${opacityStyle} bg-rose-50/50 dark:bg-rose-950/10 text-rose-800/90 dark:text-rose-300/90 border-rose-300 dark:border-rose-800 hover:bg-rose-100/70 dark:hover:bg-rose-900/30`;
       case 6:
-        return 'bg-violet-50 dark:bg-violet-950/20 text-violet-800 dark:text-violet-300 border-b-2 border-violet-300 dark:border-violet-800 hover:bg-violet-100/70 dark:hover:bg-violet-900/30';
+        return `${opacityStyle} bg-violet-50/50 dark:bg-violet-950/10 text-violet-800/90 dark:text-violet-300/90 border-violet-300 dark:border-violet-800 hover:bg-violet-100/70 dark:hover:bg-violet-900/30`;
       default: // HSK 7-9 (represented by targetHskLevel 7)
-        return 'bg-fuchsia-50 dark:bg-fuchsia-950/20 text-fuchsia-800 dark:text-fuchsia-300 border-b-2 border-fuchsia-300 dark:border-fuchsia-800 hover:bg-fuchsia-100/70 dark:hover:bg-fuchsia-900/30';
+        return `${opacityStyle} bg-fuchsia-50/50 dark:bg-fuchsia-950/10 text-fuchsia-800/90 dark:text-fuchsia-300/90 border-fuchsia-300 dark:border-fuchsia-800 hover:bg-fuchsia-100/70 dark:hover:bg-fuchsia-900/30`;
     }
   };
 
@@ -274,18 +235,18 @@ export default function HomeReaderPage() {
                 <button
                   key={histStory.storyId}
                   onClick={() => selectStoryFromHistory(idx)}
-                  className={`w-full text-left p-3 rounded-xl transition duration-150 border flex flex-col gap-1.5 cursor-pointer ${
+                  className={`w-full text-left p-3 rounded-xl transition duration-150 border flex flex-col gap-2 cursor-pointer ${
                     isActive
                       ? 'bg-blue-50/80 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200'
                       : 'bg-white dark:bg-neutral-800 border-slate-100 dark:border-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-neutral-800/60'
                   }`}
                 >
                   <span className="font-bold text-sm line-clamp-1">{histStory.title}</span>
-                  <div className="flex items-center justify-between w-full text-[10px] font-semibold text-slate-400 dark:text-neutral-500">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-neutral-700">
+                  <div className="flex items-center justify-between w-full text-[10px] font-semibold">
+                    <span className={`px-2 py-0.5 rounded-full border font-bold ${getHskBadgeColors(histStory.targetLevel)}`}>
                       HSK {histStory.targetLevel === 7 ? '7-9' : histStory.targetLevel}
                     </span>
-                    <span>{histStory.tokens?.length || 0} words</span>
+                    <span className="text-slate-400 dark:text-neutral-500">{histStory.tokens?.length || 0} words</span>
                   </div>
                 </button>
               );
@@ -298,70 +259,115 @@ export default function HomeReaderPage() {
       <div className="flex-1 flex flex-col min-w-0 max-w-4xl mx-auto w-full p-4 sm:p-6 lg:p-8">
         
         {/* Navigation & Toolbar Header */}
-        <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200 dark:border-neutral-800 gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-              className="md:hidden p-2 rounded-lg bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
-              title="Toggle History"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg p-1">
-              <label htmlFor="hsk-select" className="text-xs font-semibold text-slate-500 dark:text-neutral-400 px-2">Level:</label>
-              <select
-                id="hsk-select"
-                value={targetHskLevel}
-                onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
-                className="pl-1 pr-3 py-1 text-xs sm:text-sm bg-transparent border-none transition cursor-pointer font-bold text-slate-800 dark:text-slate-100 focus:outline-none"
+        <header className="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-neutral-800">
+          <div className="flex justify-between items-center w-full gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                className="md:hidden p-2 rounded-lg bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                title="Toggle History"
               >
-                <option value={1}>HSK 1</option>
-                <option value={2}>HSK 2</option>
-                <option value={3}>HSK 3</option>
-                <option value={4}>HSK 4</option>
-                <option value={5}>HSK 5</option>
-                <option value={6}>HSK 6</option>
-                <option value={7}>HSK 7-9</option>
-              </select>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
+              </h1>
             </div>
 
-            <button
-              onClick={fetchNewStory}
-              disabled={loading}
-              className="px-4 py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all font-semibold shadow-xs shadow-blue-500/20 cursor-pointer flex items-center gap-1.5"
-            >
-              {loading ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                  <span>New Story</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Level Selector Dropdown */}
+              <div className="flex items-center bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg p-1 shadow-2xs">
+                <label htmlFor="hsk-select" className="text-xs font-semibold text-slate-500 dark:text-neutral-400 px-2">Level:</label>
+                <select
+                  id="hsk-select"
+                  value={targetHskLevel}
+                  onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
+                  className="pl-1 pr-3 py-1 text-xs sm:text-sm bg-transparent border-none transition cursor-pointer font-bold text-slate-800 dark:text-slate-100 focus:outline-none"
+                >
+                  <option value={1}>HSK 1</option>
+                  <option value={2}>HSK 2</option>
+                  <option value={3}>HSK 3</option>
+                  <option value={4}>HSK 4</option>
+                  <option value={5}>HSK 5</option>
+                  <option value={6}>HSK 6</option>
+                  <option value={7}>HSK 7-9</option>
+                </select>
+              </div>
 
-            <button
-              onClick={logout}
-              className="p-2 text-slate-500 hover:text-red-600 dark:text-neutral-400 dark:hover:text-red-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
-              title="Logout"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              <button
+                onClick={fetchNewStory}
+                disabled={loading}
+                className="px-4 py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all font-semibold shadow-xs shadow-blue-500/20 cursor-pointer flex items-center gap-1.5"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    <span>New Story</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={logout}
+                className="p-2 text-slate-500 hover:text-red-600 dark:text-neutral-400 dark:hover:text-red-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+                title="Logout"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Target Story Length Slider / Selection Toolbar */}
+          <div className="flex items-center justify-between bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-xl p-3 shadow-2xs w-full">
+            <span className="text-xs font-bold text-slate-500 dark:text-neutral-400 flex items-center gap-1">
+              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
               </svg>
-            </button>
+              <span>Estimated Story Length:</span>
+            </span>
+            <div className="flex bg-slate-100 dark:bg-neutral-800 p-0.5 rounded-lg border border-slate-200/50 dark:border-neutral-700/50">
+              <button
+                onClick={() => setStoryLength('short')}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                  storyLength === 'short'
+                    ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Short (80-150)
+              </button>
+              <button
+                onClick={() => setStoryLength('medium')}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                  storyLength === 'medium'
+                    ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Medium (150-250)
+              </button>
+              <button
+                onClick={() => setStoryLength('long')}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                  storyLength === 'long'
+                    ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Long (250-400)
+              </button>
+            </div>
           </div>
         </header>
 
@@ -405,37 +411,18 @@ export default function HomeReaderPage() {
                   </svg>
                   <span>{colorCodeHsk ? 'Color Code' : 'Monochrome'}</span>
                 </button>
-
-                <button
-                  onClick={handleSpeak}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition duration-150 ${
-                    isSpeaking
-                      ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900 animate-pulse'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900'
-                  }`}
-                >
-                  {isSpeaking ? (
-                    <>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-                      </svg>
-                      <span>Stop</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
-                      </svg>
-                      <span>Listen</span>
-                    </>
-                  )}
-                </button>
               </div>
+            </div>
+
+            <div className="text-xs bg-blue-50/50 dark:bg-blue-950/10 text-slate-500 dark:text-neutral-400 p-3 rounded-lg border border-slate-100 dark:border-neutral-800 text-center select-none font-medium">
+              💡 <span className="font-semibold text-slate-700 dark:text-slate-300">Quick tip:</span> Double-click any word to instantly toggle your known words.
             </div>
             
             {/* Interactive Reader Block */}
-            <div className="flex flex-wrap gap-y-8 gap-x-2.5 leading-[2.6] text-2xl sm:text-3xl tracking-wide select-none p-5 sm:p-8 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-xs">
+            <div className="flex flex-wrap gap-y-10 gap-x-3 leading-[2.6] text-2xl sm:text-3xl tracking-wide select-none p-5 sm:p-8 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-xs">
               {story.tokens.map((token, index) => {
+                const isKnown = knownWords.includes(token.text);
+
                 if (!token.isWord) {
                   return (
                     <span key={index} className="text-slate-400 dark:text-neutral-500 self-end mb-1 font-medium">
@@ -448,10 +435,16 @@ export default function HomeReaderPage() {
                   <span
                     key={index}
                     onClick={() => setActiveToken(token)}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      toggleWordKnown(token.text);
+                    }}
                     className={`group relative inline-flex flex-col items-center cursor-pointer rounded-lg px-2 pb-0.5 transition-all duration-150 ${
                       colorCodeHsk
-                        ? getHskColorClass(token.hsk)
-                        : 'hover:bg-amber-100/60 dark:hover:bg-neutral-800 text-slate-800 dark:text-slate-200'
+                        ? getHskColorClass(token.hsk, isKnown)
+                        : isKnown
+                          ? 'hover:bg-amber-100/60 dark:hover:bg-neutral-800 text-slate-400 dark:text-neutral-500 line-through decoration-slate-300/40'
+                          : 'hover:bg-amber-100/60 dark:hover:bg-neutral-800 text-slate-800 dark:text-slate-200 border-b border-dashed border-slate-300 dark:border-neutral-700'
                     }`}
                   >
                     {showPinyin && token.pinyin && (
@@ -459,7 +452,17 @@ export default function HomeReaderPage() {
                         {token.pinyin.replace(/[0-9]/g, '')}
                       </span>
                     )}
-                    <span className="font-semibold tracking-wider">{token.text}</span>
+                    
+                    <span className="font-semibold tracking-wider relative">
+                      {token.text}
+                      
+                      {/* Color-code target tier superscript marker */}
+                      {colorCodeHsk && token.hsk && (
+                        <span className="absolute -top-1.5 -right-2 text-[8px] leading-none font-extrabold opacity-60 bg-white/90 dark:bg-neutral-800/90 px-0.5 rounded border border-current scale-75 select-none z-10">
+                          {token.hsk === 7 ? '7+' : token.hsk}
+                        </span>
+                      )}
+                    </span>
                   </span>
                 );
               })}
@@ -625,14 +628,27 @@ export default function HomeReaderPage() {
           </p>
 
           <div className="flex gap-3">
-            <button
-              onClick={() => markWordAsKnown(activeToken.text)}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-3 px-4 rounded-xl transition duration-150 cursor-pointer shadow-xs shadow-emerald-500/15 text-center"
-            >
-              I know this word
-            </button>
+            {knownWords.includes(activeToken.text) ? (
+              <button
+                onClick={() => toggleWordKnown(activeToken.text)}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-3 px-4 rounded-xl transition duration-150 cursor-pointer shadow-xs shadow-emerald-500/15 text-center flex items-center justify-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span>Known (Click to Undo)</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => toggleWordKnown(activeToken.text)}
+                className="flex-1 border-2 border-slate-200 hover:border-emerald-600 hover:bg-emerald-50 dark:border-neutral-700 dark:hover:bg-emerald-950/10 text-slate-700 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 text-sm font-bold py-3 px-4 rounded-xl transition duration-150 cursor-pointer text-center"
+              >
+                ✓ Mark as Known
+              </button>
+            )}
+
             {activeToken.hsk && (
-              <span className="px-4 py-3 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center border border-amber-200 dark:border-amber-900/60">
+              <span className={`px-4 py-3 rounded-xl text-xs font-bold flex items-center justify-center border ${getHskBadgeColors(activeToken.hsk)}`}>
                 HSK {activeToken.hsk === 7 ? '7-9' : activeToken.hsk}
               </span>
             )}

@@ -9,7 +9,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function POST(request: Request) {
   try {
-    const { userId, targetHskLevel } = await request.json();
+    const { userId, targetHskLevel, storyLength } = await request.json();
 
     if (!userId || targetHskLevel === undefined) {
       return NextResponse.json({ error: 'Missing userId or targetHskLevel' }, { status: 400 });
@@ -21,6 +21,15 @@ export async function POST(request: Request) {
     }
 
     const displayHskLevel = hskLevelParsed === 7 ? '7-9' : String(hskLevelParsed);
+
+    // Calculate requested story length constraints based on selected ranges
+    const chosenLength = storyLength || 'short';
+    let lengthRange = '80-150';
+    if (chosenLength === 'medium') {
+      lengthRange = '150-250';
+    } else if (chosenLength === 'long') {
+      lengthRange = '250-400';
+    }
 
     // 1. Retrieve the user's previously read story IDs
     const readStoriesSnap = await db.collection('users').doc(userId).collection('readStories').get();
@@ -108,7 +117,7 @@ export async function POST(request: Request) {
       - Avoid proper nouns, idioms, or cultural references that would require vocabulary outside the allowed set.
 
       # Length
-      - Total length: 80-150 Chinese characters (count characters, not words; punctuation does not count toward this total).
+      - Total length: ${lengthRange} Chinese characters (this length is an estimate, count characters, not words; punctuation does not count toward this total).
 
       # Output Format
       - Return ONLY the requested JSON format matching the schema.

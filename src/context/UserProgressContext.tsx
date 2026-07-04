@@ -11,6 +11,7 @@ interface UserProgressContextType {
   targetHskLevel: number;
   loading: boolean;
   addKnownWord: (word: string) => Promise<void>;
+  removeKnownWord: (word: string) => Promise<void>;
   updateTargetHskLevel: (level: number) => Promise<void>;
   logout: () => Promise<void>;
   loginDemo: () => void;
@@ -113,6 +114,36 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const removeKnownWord = async (word: string) => {
+    if (!userId) return;
+
+    // Optimistic UI update
+    setKnownWords((prev) => prev.filter((w) => w !== word));
+
+    if (!isFirebaseConfigured) {
+      return; // Skip Firestore write in unconfigured local demo mode
+    }
+
+    try {
+      const docRef = doc(db, 'users', userId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const currentWords = docSnap.data().knownWords || [];
+        const updatedWords = currentWords.filter((w: string) => w !== word);
+        await updateDoc(docRef, {
+          knownWords: updatedWords,
+        });
+      }
+    } catch (error) {
+      console.error('Error removing known word from Firestore:', error);
+      // Rollback optimistic update on failure
+      setKnownWords((prev) => {
+        if (prev.includes(word)) return prev;
+        return [...prev, word];
+      });
+    }
+  };
+
   const updateTargetHskLevel = async (level: number) => {
     if (!userId) return;
 
@@ -153,6 +184,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         targetHskLevel,
         loading,
         addKnownWord,
+        removeKnownWord,
         updateTargetHskLevel,
         logout,
         loginDemo,
