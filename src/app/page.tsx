@@ -2,8 +2,17 @@
 
 import { useState } from 'react';
 import { Token } from '@/lib/types';
+import { useUserProgress } from '@/context/UserProgressContext';
 
 export default function HomeReaderPage() {
+  const {
+    userId,
+    targetHskLevel,
+    addKnownWord,
+    updateTargetHskLevel,
+    loading: userProgressLoading,
+  } = useUserProgress();
+
   const [showPinyin, setShowPinyin] = useState(true);
   const [activeToken, setActiveToken] = useState<Token | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,8 +29,8 @@ export default function HomeReaderPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: 'test-user-id', // Adjust as Authentication flows are implemented
-          targetHskLevel: 3,
+          userId,
+          targetHskLevel,
         }),
       });
       const data = await res.json();
@@ -38,9 +47,20 @@ export default function HomeReaderPage() {
   };
 
   const markWordAsKnown = async (word: string) => {
-    alert(`"${word}" has been marked as known in your vocabulary list.`);
+    await addKnownWord(word);
     setActiveToken(null);
   };
+
+  if (userProgressLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-500 mt-4 text-sm font-medium">Loading user profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-6 min-h-screen flex flex-col justify-between">
@@ -49,17 +69,30 @@ export default function HomeReaderPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             Zimu <span className="text-gray-400 font-normal">字幕</span>
           </h1>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <label htmlFor="hsk-select" className="text-sm font-medium text-gray-700">Target Level:</label>
+              <select
+                id="hsk-select"
+                value={targetHskLevel}
+                onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
+                className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition cursor-pointer font-medium"
+              >
+                <option value={1}>HSK 1</option>
+                <option value={2}>HSK 2</option>
+                <option value={3}>HSK 3</option>
+              </select>
+            </div>
             <button
               onClick={() => setShowPinyin(!showPinyin)}
-              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition"
+              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition font-medium"
             >
               {showPinyin ? 'Hide Pinyin' : 'Show Pinyin'}
             </button>
             <button
               onClick={fetchNewStory}
               disabled={loading}
-              className="px-4 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition"
+              className="px-4 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition font-medium"
             >
               {loading ? 'Generating...' : 'Next Story'}
             </button>
