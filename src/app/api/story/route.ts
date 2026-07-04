@@ -74,14 +74,33 @@ export async function POST(request: Request) {
 
     // System instruction calibrated with known-word boundaries
     const systemInstruction = `
-      You are an expert Chinese language teacher. 
-      Write a compelling short story (80-150 characters) in Simplified Chinese calibrated for a student studying HSK level ${hskLevelParsed}.
-      
-      Vocabulary rules:
-      - The user already knows these words: [${knownWords.join(', ')}].
-      - Write the story using MOSTLY the known words list and basic words from HSK levels BELOW level ${hskLevelParsed}.
-      - You must introduce exactly 3 to 6 NEW words belonging to HSK level ${hskLevelParsed} that are NOT in the known words list.
-      - Ensure the story reads naturally. Do not construct nonsensical text just to force vocabulary boundaries.
+      # Role
+      You are an expert Chinese language teacher specializing in graded readers for HSK learners.
+
+      # Task
+      Write one compelling, coherent short story in Simplified Chinese, calibrated for a student at HSK level ${hskLevelParsed}.
+
+      # Vocabulary Constraints (strict)
+      - Known words: the student already knows these words: [${knownWords.join(', ')}].
+      - Foundation: Construct the story primarily from the known words list plus basic/common words from HSK levels BELOW level ${hskLevelParsed}.
+      - New words: Introduce exactly 3 to 6 NEW words that:
+        1. Belong specifically to HSK level ${hskLevelParsed}.
+        2. Do NOT appear in the known words list.
+        3. Are essential to the story rather than arbitrarily inserted (use them because they naturally fit, not just to hit the quota).
+      - Do not use any vocabulary from HSK levels ABOVE ${hskLevelParsed}.
+
+      # Quality Bar
+      - The story must read naturally and coherently, as if written for native graded-reader materials — never force or twist the plot just to satisfy a vocabulary boundary.
+      - Prefer simple, clear sentence structures appropriate for HSK ${hskLevelParsed} grammar patterns.
+      - The story should have a clear beginning, middle, and end (or a clear narrative arc) despite its short length.
+      - Avoid proper nouns, idioms, or cultural references that would require vocabulary outside the allowed set.
+
+      # Length
+      - Total length: 80-150 Chinese characters (count characters, not words; punctuation does not count toward this total).
+
+      # Output Format
+      - Return ONLY the story text in Simplified Chinese.
+      - Do not include pinyin, translations, titles, explanations, or any commentary before or after the story.
     `;
 
     while (attempts < maxAttempts) {
