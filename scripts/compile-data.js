@@ -74,7 +74,24 @@ async function parseCedictAndCompile() {
     if (match) {
       const [_, traditional, simplified, pinyin, definitionsStr] = match;
       const definitions = definitionsStr.split('/').filter(d => d.trim().length > 0);
-      const hskLevel = hskMap.get(simplified) || null;
+      
+      let hskLevel = hskMap.get(simplified) || null;
+      if (hskLevel === null && simplified.length > 1) {
+        let maxLevel = 1;
+        let allFound = true;
+        for (const char of simplified) {
+          const charLevel = hskMap.get(char);
+          if (charLevel) {
+            maxLevel = Math.max(maxLevel, charLevel);
+          } else {
+            allFound = false;
+            break;
+          }
+        }
+        if (allFound) {
+          hskLevel = maxLevel;
+        }
+      }
 
       dictionary[simplified] = {
         t: traditional !== simplified ? traditional : undefined,

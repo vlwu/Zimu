@@ -46,7 +46,7 @@ export function loadVocabulary(): Map<string, DictEntry> {
             if (Array.isArray(val)) {
               level = Number(val[0]) || 1;
             } else {
-              const rawLevel = (val as any).level ?? (val as any).Level ?? (val as any).l ?? (val as any).level_3_0;
+              const rawLevel = (val as any).level ?? (val as any).Level ?? (val as any).l ?? (val as any).level_3_0 ?? (val as any).h;
               level = rawLevel === '7-9' ? 7 : (Number(rawLevel) || 1);
             }
           } else if (typeof val === 'number') {

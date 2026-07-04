@@ -278,22 +278,31 @@ export default function HomeReaderPage() {
 
             <div className="flex items-center gap-2">
               {/* Level Selector Dropdown */}
-              <div className="flex items-center bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg p-1 shadow-2xs">
-                <label htmlFor="hsk-select" className="text-xs font-semibold text-slate-500 dark:text-neutral-400 px-2">Level:</label>
+              <div className="relative group min-w-[140px]">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 011.875 1.875v1.5a1.875 1.875 0 01-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875v-1.5c0-1.036.84-1.875 1.875-1.875z" />
+                  </svg>
+                </div>
                 <select
                   id="hsk-select"
                   value={targetHskLevel}
                   onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
-                  className="pl-1 pr-3 py-1 text-xs sm:text-sm bg-transparent border-none transition cursor-pointer font-bold text-slate-800 dark:text-slate-100 focus:outline-none"
+                  className="appearance-none w-full bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 hover:border-blue-400 dark:hover:border-blue-500 text-slate-800 dark:text-slate-100 font-bold text-sm rounded-xl pl-9 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer shadow-sm"
                 >
-                  <option value={1}>HSK 1</option>
-                  <option value={2}>HSK 2</option>
-                  <option value={3}>HSK 3</option>
-                  <option value={4}>HSK 4</option>
-                  <option value={5}>HSK 5</option>
-                  <option value={6}>HSK 6</option>
-                  <option value={7}>HSK 7-9</option>
+                  <option value={1}>HSK 1 (Beginner)</option>
+                  <option value={2}>HSK 2 (Elementary)</option>
+                  <option value={3}>HSK 3 (Intermediate)</option>
+                  <option value={4}>HSK 4 (Upper Int.)</option>
+                  <option value={5}>HSK 5 (Advanced)</option>
+                  <option value={6}>HSK 6 (Proficient)</option>
+                  <option value={7}>HSK 7-9 (Mastery)</option>
                 </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+                  </svg>
+                </div>
               </div>
 
               <button

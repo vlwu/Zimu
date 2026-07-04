@@ -14,7 +14,7 @@ interface UserProgressContextType {
   removeKnownWord: (word: string) => Promise<void>;
   updateTargetHskLevel: (level: number) => Promise<void>;
   logout: () => Promise<void>;
-  loginDemo: () => void;
+  loginDemo: (level?: number) => Promise<void>;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
@@ -71,11 +71,6 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           setKnownWords(data.knownWords || []);
           setTargetHskLevel(data.targetHskLevel || 3);
         } else {
-          const defaults = {
-            knownWords: [],
-            targetHskLevel: 3,
-          };
-          await setDoc(docRef, defaults);
           setKnownWords([]);
           setTargetHskLevel(3);
         }
@@ -104,9 +99,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
 
     try {
       const docRef = doc(db, 'users', userId);
-      await updateDoc(docRef, {
+      await setDoc(docRef, {
         knownWords: arrayUnion(word),
-      });
+      }, { merge: true });
     } catch (error) {
       console.error('Error saving known word to Firestore:', error);
       // Rollback optimistic update on failure
@@ -156,9 +151,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
 
     try {
       const docRef = doc(db, 'users', userId);
-      await updateDoc(docRef, {
+      await setDoc(docRef, {
         targetHskLevel: level,
-      });
+      }, { merge: true });
     } catch (error) {
       console.error('Error saving target HSK level to Firestore:', error);
     }
@@ -171,8 +166,23 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     setUserId(null);
   };
 
-  const loginDemo = () => {
+  const loginDemo = async (level: number = 3) => {
     setUserId('test-user-id');
+    setTargetHskLevel(level < 7 ? level + 1 : 7);
+    
+    try {
+      const res = await fetch('/api/init-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'test-user-id', level, isDemo: true })
+      });
+      const data = await res.json();
+      if (data.knownWords) {
+        setKnownWords(data.knownWords);
+      }
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 

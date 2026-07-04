@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [signUpHskLevel, setSignUpHskLevel] = useState<number>(3);
   const [error, setError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -28,7 +29,7 @@ export default function LoginPage() {
 
     if (!isFirebaseConfigured) {
       setError('Firebase is not configured. Redirecting to demo mode...');
-      loginDemo();
+      await loginDemo(signUpHskLevel);
       router.push('/');
       setAuthLoading(false);
       return;
@@ -36,11 +37,18 @@ export default function LoginPage() {
 
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await fetch('/api/init-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: userCredential.user.uid, level: signUpHskLevel })
+        });
+        window.location.href = '/';
+        return;
       } else {
         await signInWithEmailAndPassword(auth, email, password);
+        router.push('/');
       }
-      router.push('/');
     } catch (err: any) {
       console.error(err);
       // Map Firebase Auth errors to readable messages
@@ -97,14 +105,35 @@ export default function LoginPage() {
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
             <p className="font-semibold mb-2">⚠️ Local Demo Mode Active</p>
             <p className="mb-4">Firebase environment variables are not configured. You can use the app immediately with a mock profile.</p>
+            <div className="mb-4">
+              <label htmlFor="demo-hsk-level" className="block text-sm font-medium text-amber-900 mb-1">
+                Current Chinese Level
+              </label>
+              <select
+                id="demo-hsk-level"
+                value={signUpHskLevel}
+                onChange={(e) => setSignUpHskLevel(Number(e.target.value))}
+                className="block w-full px-3 py-2 bg-white/50 border border-amber-300 rounded-lg text-sm shadow-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-amber-900"
+              >
+                <option value={1}>Beginner (HSK 1)</option>
+                <option value={2}>Elementary (HSK 2)</option>
+                <option value={3}>Intermediate (HSK 3)</option>
+                <option value={4}>Upper Intermediate (HSK 4)</option>
+                <option value={5}>Advanced (HSK 5)</option>
+                <option value={6}>Proficient (HSK 6)</option>
+                <option value={7}>Mastery (HSK 7-9)</option>
+              </select>
+            </div>
             <button
-              onClick={() => {
-                loginDemo();
+              onClick={async () => {
+                setAuthLoading(true);
+                await loginDemo(signUpHskLevel);
                 router.push('/');
               }}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition text-center cursor-pointer"
+              disabled={authLoading}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition text-center cursor-pointer disabled:opacity-50"
             >
-              Enter Demo Mode
+              {authLoading ? 'Loading...' : 'Enter Demo Mode'}
             </button>
           </div>
         )}
@@ -117,6 +146,28 @@ export default function LoginPage() {
               </div>
             )}
             <div className="space-y-4">
+              {isSignUp && (
+                <div>
+                  <label htmlFor="hsk-level" className="block text-sm font-medium text-gray-700">
+                    Current Chinese Level
+                  </label>
+                  <select
+                    id="hsk-level"
+                    value={signUpHskLevel}
+                    onChange={(e) => setSignUpHskLevel(Number(e.target.value))}
+                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm shadow-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-gray-900 animate-none"
+                  >
+                    <option value={1}>Beginner (HSK 1)</option>
+                    <option value={2}>Elementary (HSK 2)</option>
+                    <option value={3}>Intermediate (HSK 3)</option>
+                    <option value={4}>Upper Intermediate (HSK 4)</option>
+                    <option value={5}>Advanced (HSK 5)</option>
+                    <option value={6}>Proficient (HSK 6)</option>
+                    <option value={7}>Mastery (HSK 7-9)</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">We'll pre-fill your known words up to this level.</p>
+                </div>
+              )}
               <div>
                 <label htmlFor="email-address" className="block text-sm font-medium text-gray-700">
                   Email address
