@@ -17,17 +17,6 @@ Most Chinese apps drill vocabulary in isolation. Zimu instead:
 
 No decks. No streaks. Just reading that gets a little harder, one story at a time.
 
-## Status
-
-🚧 Early setup — no app code yet. Currently in the groundwork phase: accounts, data sources, and project structure.
-
-## Planned stack
-
-- **Next.js** — app frontend + backend routes
-- **Firebase** (Firestore + Auth) — known-word tracking, story library, accounts
-- **Google Gemini API** (free tier) — story generation
-- **Firebase Hosting** — deployment
-
 ## Data sources
 
 - **CC-CEDICT** — Chinese-English dictionary data, used for word lookups and definitions. Licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Source: [mdbg.net/chinese/dictionary?page=cedict](https://www.mdbg.net/chinese/dictionary?page=cedict)
@@ -47,13 +36,13 @@ Attribution for CC-CEDICT is required by its license and will be included in the
 ## Roadmap
 
 - [x] Project setup (accounts, data sources)
-- [ ] Firebase project scaffolding
-- [ ] HSK word list + CC-CEDICT parsing
-- [ ] Story generation + vocabulary validator
-- [ ] Reading UI (pinyin toggle, tap-to-define)
-- [ ] Known-word tracking
-- [ ] Comprehension checks
-- [ ] Multi-user support (accounts, story caching, cost controls)
+- [x] Firebase project scaffolding
+- [x] HSK word list + CC-CEDICT parsing
+- [x] Story generation + vocabulary validator
+- [x] Reading UI (pinyin toggle, tap-to-define)
+- [x] Known-word tracking
+- [x] Comprehension checks
+- [x] Multi-user support (accounts, story caching, cost controls)
 
 ## Getting started
 
