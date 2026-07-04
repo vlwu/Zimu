@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
 import { db } from '@/lib/firebase-admin';
 import { segmentChinese } from '@/lib/segmenter-server';
-import { Token, ComprehensionQuestion } from '@/lib/types';
 
 // Initialize the Gemini client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -76,15 +75,6 @@ export async function POST(request: Request) {
     const userDocRef = db.collection('users').doc(userId);
     const userDoc = await userDocRef.get();
     const knownWords: string[] = userDoc.exists ? (userDoc.data()?.knownWords || []) : [];
-    const knownWordsSet = new Set(knownWords);
-
-    // Dynamic state to enforce stricter negative constraints in retries
-    let forbiddenWordsUsed: string[] = [];
-    let attempts = 0;
-    const maxAttempts = 4; // 1 initial generation + up to 3 validation retries
-
-    let storyData: any = null;
-    let segmentedTokens: Token[] = [];
 
     // System instruction calibrated with known-word boundaries and quizzes
     const systemInstruction = `
@@ -124,91 +114,57 @@ export async function POST(request: Request) {
       - Return ONLY the requested JSON format matching the schema.
     `;
 
-    while (attempts < maxAttempts) {
-      attempts++;
+    const userPrompt = 'Please write a new story following the instructions.';
 
-      // Adjust prompt content based on validation feedback from prior runs
-      const userPrompt = attempts === 1
-        ? 'Please write a new story following the instructions.'
-        : `Your previous response included out-of-level vocabulary words that are too advanced for the student. Please rewrite the story. Crucially, do NOT use any of these forbidden words: [${forbiddenWordsUsed.join(', ')}]. Make sure all characters used strictly align with HSK level ${displayHskLevel} or below, or the known words list.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: userPrompt,
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              storyText: { type: Type.STRING, description: 'The story written in Simplified Chinese' },
-              translation: { type: Type.STRING, description: 'Natural English translation of the story' },
-              newWordsIntroduced: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: 'The 3-6 new HSK vocabulary words introduced in the story'
-              },
-              comprehensionQuestions: {
-                type: Type.ARRAY,
-                description: 'Exactly 3 multiple-choice comprehension questions about the story',
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    question: { type: Type.STRING, description: 'The question in Simplified Chinese' },
-                    options: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING },
-                      description: 'Exactly 4 option choices'
-                    },
-                    answerIndex: { type: Type.INTEGER, description: '0-based index of the correct option' },
-                    explanation: { type: Type.STRING, description: 'English explanation of the correct answer' }
-                  },
-                  required: ['question', 'options', 'answerIndex', 'explanation']
-                }
-              }
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: userPrompt,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            storyText: { type: Type.STRING, description: 'The story written in Simplified Chinese' },
+            translation: { type: Type.STRING, description: 'Natural English translation of the story' },
+            newWordsIntroduced: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'The 3-6 new HSK vocabulary words introduced in the story'
             },
-            required: ['title', 'storyText', 'translation', 'newWordsIntroduced', 'comprehensionQuestions']
-          }
-        }
-      });
-
-      const outputText = response.text;
-      if (!outputText) {
-        throw new Error('No content returned from the Gemini API.');
-      }
-
-      storyData = JSON.parse(outputText);
-      const textToSegment = storyData.storyText || '';
-      segmentedTokens = segmentChinese(textToSegment);
-
-      // Validation Step: Scan all generated tokens
-      const outOfLevelWordsFound: string[] = [];
-
-      for (const token of segmentedTokens) {
-        if (token.isWord) {
-          // Identify unapproved words strictly above the target HSK level
-          if (token.hsk && token.hsk > hskLevelParsed && !knownWordsSet.has(token.text)) {
-            outOfLevelWordsFound.push(token.text);
-          }
+            comprehensionQuestions: {
+              type: Type.ARRAY,
+              description: 'Exactly 3 multiple-choice comprehension questions about the story',
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  question: { type: Type.STRING, description: 'The question in Simplified Chinese' },
+                  options: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                    description: 'Exactly 4 option choices'
+                  },
+                  answerIndex: { type: Type.INTEGER, description: '0-based index of the correct option' },
+                  explanation: { type: Type.STRING, description: 'English explanation of the correct answer' }
+                },
+                required: ['question', 'options', 'answerIndex', 'explanation']
+              }
+            }
+          },
+          required: ['title', 'storyText', 'translation', 'newWordsIntroduced', 'comprehensionQuestions']
         }
       }
+    });
 
-      const uniqueForbidden = Array.from(new Set(outOfLevelWordsFound));
-
-      // Check against tolerance threshold (maximum of 2 unapproved out-of-level words allowed)
-      if (uniqueForbidden.length <= 2) {
-        break; // Validation check passed
-      } else {
-        // Collect identified words to append to the strict prompt on retry
-        forbiddenWordsUsed = Array.from(new Set([...forbiddenWordsUsed, ...uniqueForbidden]));
-        console.warn(`[Attempt ${attempts}/${maxAttempts}] Validation failed. ${uniqueForbidden.length} unapproved out-of-level words found: ${uniqueForbidden.join(', ')}. Retrying...`);
-      }
+    const outputText = response.text;
+    if (!outputText) {
+      throw new Error('No content returned from the Gemini API.');
     }
 
-    if (!storyData || !storyData.storyText) {
-      throw new Error('Failed to generate valid story text after maximum attempts.');
-    }
+    const storyData = JSON.parse(outputText);
+    const textToSegment = storyData.storyText || '';
+    const segmentedTokens = segmentChinese(textToSegment);
 
     // Save story to the global shared collection
     const newStoryRef = await db.collection('stories').add({

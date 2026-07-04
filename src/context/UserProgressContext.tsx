@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, collection, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, isFirebaseConfigured } from '@/lib/firebase-client';
 
@@ -15,6 +15,8 @@ interface UserProgressContextType {
   updateTargetHskLevel: (level: number) => Promise<void>;
   logout: () => Promise<void>;
   loginDemo: (level?: number) => Promise<void>;
+  flashcardProgress: Record<string, { interval: number; repetition: number; efactor: number; dueDate: string }>;
+  saveFlashcardProgress: (word: string, interval: number, repetition: number, efactor: number, dueDate: string) => Promise<void>;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
@@ -23,6 +25,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   const [userId, setUserId] = useState<string | null>(null);
   const [knownWords, setKnownWords] = useState<string[]>([]);
   const [targetHskLevel, setTargetHskLevel] = useState<number>(3);
+  const [flashcardProgress, setFlashcardProgress] = useState<Record<string, { interval: number; repetition: number; efactor: number; dueDate: string }>>({});
   const [loading, setLoading] = useState<boolean>(true);
 
   // Synchronize on Auth state changes if Firebase is configured
@@ -48,6 +51,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     if (userId === null) {
       setKnownWords([]);
       setTargetHskLevel(3);
+      setFlashcardProgress({});
       setLoading(false);
       return;
     }
@@ -58,6 +62,20 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         console.warn('⚠️ Firebase Client credentials not configured. Falling back to in-memory local demo mode.');
         setKnownWords([]);
         setTargetHskLevel(3);
+        
+        // Load flashcard progress from localStorage for demo user
+        const storedProgress = localStorage.getItem(`zimu_flashcard_progress_test-user-id`);
+        if (storedProgress) {
+          try {
+            setFlashcardProgress(JSON.parse(storedProgress));
+          } catch (e) {
+            console.error('Failed to parse stored progress:', e);
+            setFlashcardProgress({});
+          }
+        } else {
+          setFlashcardProgress({});
+        }
+        
         setLoading(false);
         return;
       }
@@ -74,6 +92,15 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           setKnownWords([]);
           setTargetHskLevel(3);
         }
+
+        // Fetch subcollection flashcards
+        const flashcardsSnap = await getDocs(collection(db, 'users', userId!, 'flashcards'));
+        const progressMap: Record<string, any> = {};
+        flashcardsSnap.forEach((doc) => {
+          progressMap[doc.id] = doc.data();
+        });
+        setFlashcardProgress(progressMap);
+
       } catch (error) {
         console.error('Error fetching user progress:', error);
       } finally {
@@ -164,12 +191,25 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       await auth.signOut();
     }
     setUserId(null);
+    setFlashcardProgress({});
   };
 
   const loginDemo = async (level: number = 3) => {
     setUserId('test-user-id');
     setTargetHskLevel(level < 7 ? level + 1 : 7);
     
+    // Load flashcard progress for demo user
+    const storedProgress = localStorage.getItem('zimu_flashcard_progress_test-user-id');
+    if (storedProgress) {
+      try {
+        setFlashcardProgress(JSON.parse(storedProgress));
+      } catch (e) {
+        setFlashcardProgress({});
+      }
+    } else {
+      setFlashcardProgress({});
+    }
+
     try {
       const res = await fetch('/api/init-user', {
         method: 'POST',
@@ -186,6 +226,45 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     setLoading(false);
   };
 
+  const saveFlashcardProgress = async (
+    word: string,
+    interval: number,
+    repetition: number,
+    efactor: number,
+    dueDate: string
+  ) => {
+    if (!userId) return;
+
+    // Optimistic UI update
+    setFlashcardProgress((prev) => {
+      const updated = {
+        ...prev,
+        [word]: { interval, repetition, efactor, dueDate },
+      };
+      // Keep localStorage synchronized
+      localStorage.setItem(`zimu_flashcard_progress_${userId}`, JSON.stringify(updated));
+      return updated;
+    });
+
+    if (!isFirebaseConfigured) {
+      return; // Skip Firestore write in unconfigured local demo mode
+    }
+
+    try {
+      const cardRef = doc(db, 'users', userId, 'flashcards', word);
+      await setDoc(cardRef, {
+        word,
+        interval,
+        repetition,
+        efactor,
+        dueDate,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (error) {
+      console.error('Error saving flashcard progress to Firestore:', error);
+    }
+  };
+
   return (
     <UserProgressContext.Provider
       value={{
@@ -198,6 +277,8 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         updateTargetHskLevel,
         logout,
         loginDemo,
+        flashcardProgress,
+        saveFlashcardProgress,
       }}
     >
       {children}
