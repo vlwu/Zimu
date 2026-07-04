@@ -19,6 +19,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid targetHskLevel' }, { status: 400 });
     }
 
+    // 1. Retrieve the user's previously read story IDs
+    const readStoriesSnap = await db.collection('users').doc(userId).collection('readStories').get();
+    const readStoryIds = new Set(readStoriesSnap.docs.map(doc => doc.id));
+
+    // 2. Query the global shared stories collection for stories matching the target HSK level
+    const cachedStoriesSnap = await db.collection('stories')
+      .where('targetLevel', '==', hskLevelParsed)
+      .get();
+
+    let foundCachedStory = null;
+    let cachedStoryId = '';
+
+    for (const doc of cachedStoriesSnap.docs) {
+      if (!readStoryIds.has(doc.id)) {
+        foundCachedStory = doc.data();
+        cachedStoryId = doc.id;
+        break;
+      }
+    }
+
+    // 3. Cache Hit: Instantly segment text and serve the cached story
+    if (foundCachedStory) {
+      const textToSegment = foundCachedStory.text || '';
+      const segmentedTokens = segmentChinese(textToSegment);
+
+      // Record this story in the user's readStories history
+      await db.collection('users').doc(userId).collection('readStories').doc(cachedStoryId).set({
+        readAt: new Date().toISOString()
+      });
+
+      return NextResponse.json({
+        storyId: cachedStoryId,
+        title: foundCachedStory.title,
+        translation: foundCachedStory.translation,
+        tokens: segmentedTokens,
+        newWords: foundCachedStory.newWords || []
+      });
+    }
+
+    // 4. Cache Miss: Pull knownWords and trigger Gemini generation pipeline
     const userDocRef = db.collection('users').doc(userId);
     const userDoc = await userDocRef.get();
     const knownWords: string[] = userDoc.exists ? (userDoc.data()?.knownWords || []) : [];
@@ -112,17 +152,24 @@ export async function POST(request: Request) {
       throw new Error('Failed to generate valid story text after maximum attempts.');
     }
 
-    // Save story to Firestore
-    const savedStoryRef = await db.collection('users').doc(userId).collection('stories').add({
+    // Save story to the global shared collection
+    const newStoryRef = await db.collection('stories').add({
       title: storyData.title,
       text: storyData.storyText,
       translation: storyData.translation,
-      newWordsIntroduced: storyData.newWordsIntroduced,
+      targetLevel: hskLevelParsed,
+      newWords: storyData.newWordsIntroduced,
       createdAt: new Date().toISOString()
+    });
+    const newStoryId = newStoryRef.id;
+
+    // Record this newly generated story in the user's read history
+    await db.collection('users').doc(userId).collection('readStories').doc(newStoryId).set({
+      readAt: new Date().toISOString()
     });
 
     return NextResponse.json({
-      storyId: savedStoryRef.id,
+      storyId: newStoryId,
       title: storyData.title,
       translation: storyData.translation,
       tokens: segmentedTokens,
