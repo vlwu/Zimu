@@ -65,6 +65,7 @@ export async function POST(request: Request) {
         storyId: cachedStoryId,
         title: foundCachedStory.title,
         translation: foundCachedStory.translation,
+        targetLevel: foundCachedStory.targetLevel,
         tokens: segmentedTokens,
         newWords: foundCachedStory.newWords || [],
         comprehensionQuestions: foundCachedStory.comprehensionQuestions || []
@@ -230,6 +231,7 @@ export async function POST(request: Request) {
       storyId: newStoryId,
       title: storyData.title,
       translation: storyData.translation,
+      targetLevel: hskLevelParsed,
       tokens: segmentedTokens,
       newWords: storyData.newWordsIntroduced,
       comprehensionQuestions: storyData.comprehensionQuestions || []

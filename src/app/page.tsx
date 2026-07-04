@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Token, ComprehensionQuestion } from '@/lib/types';
 import { useUserProgress } from '@/context/UserProgressContext';
+import { convertTonality } from '@/lib/pinyin';
 
 export default function HomeReaderPage() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function HomeReaderPage() {
     storyId: string;
     title: string;
     translation: string;
+    targetLevel?: number;
     tokens: Token[];
     comprehensionQuestions?: ComprehensionQuestion[];
   } | null>(null);
@@ -36,6 +38,7 @@ export default function HomeReaderPage() {
   const [storyHistory, setStoryHistory] = useState<any[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState<number>(-1);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
 
   // Quiz tracking states
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
@@ -128,12 +131,39 @@ export default function HomeReaderPage() {
     setIsHistoryOpen(false); // Auto close sidebar drawer on mobile
   };
 
+  const toggleLevel = (level: number) => {
+    setOpenLevels(prev => ({ ...prev, [level]: prev[level] === false ? true : false }));
+  };
+
+  // Group history by targetLevel (using 0 as a stable fallback for legacy stories)
+  const groupedHistory = storyHistory.reduce((acc, histStory) => {
+    const level = histStory.targetLevel || 0;
+    if (!acc[level]) acc[level] = [];
+    acc[level].push(histStory);
+    return acc;
+  }, {} as Record<number, any[]>);
+
+  const sortedLevels = Object.keys(groupedHistory).map(Number).sort((a, b) => b - a);
+
   // Toggle words quickly with visual cues and tactile feedback
   const toggleWordKnown = async (word: string) => {
     if (knownWords.includes(word)) {
       await removeKnownWord(word);
     } else {
       await addKnownWord(word);
+    }
+  };
+
+  const getHskDotColor = (level: number) => {
+    switch (level) {
+      case 1: return 'bg-emerald-500';
+      case 2: return 'bg-sky-500';
+      case 3: return 'bg-amber-500';
+      case 4: return 'bg-orange-500';
+      case 5: return 'bg-rose-500';
+      case 6: return 'bg-violet-500';
+      case 7: return 'bg-fuchsia-500';
+      default: return 'bg-slate-400 dark:bg-neutral-500';
     }
   };
 
@@ -151,8 +181,10 @@ export default function HomeReaderPage() {
         return 'bg-rose-50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-900/60';
       case 6:
         return 'bg-violet-50 dark:bg-violet-950/20 text-violet-800 dark:text-violet-300 border-violet-200 dark:border-violet-900/60';
-      default: // HSK 7-9 (represented by level 7)
+      case 7:
         return 'bg-fuchsia-50 dark:bg-fuchsia-950/20 text-fuchsia-800 dark:text-fuchsia-300 border-fuchsia-200 dark:border-fuchsia-900/60';
+      default:
+        return 'bg-slate-50 dark:bg-neutral-800/50 text-slate-600 dark:text-neutral-400 border-slate-200 dark:border-neutral-700';
     }
   };
 
@@ -223,34 +255,58 @@ export default function HomeReaderPage() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
           {storyHistory.length === 0 ? (
             <div className="text-center py-8 px-4">
               <p className="text-xs text-slate-400 dark:text-neutral-500">No previously generated stories. Your history will be recorded as you read.</p>
             </div>
           ) : (
-            storyHistory.map((histStory, idx) => {
-              const isActive = story?.storyId === histStory.storyId;
-              return (
-                <button
-                  key={histStory.storyId}
-                  onClick={() => selectStoryFromHistory(idx)}
-                  className={`w-full text-left p-3 rounded-xl transition duration-150 border flex flex-col gap-2 cursor-pointer ${
-                    isActive
-                      ? 'bg-blue-50/80 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200'
-                      : 'bg-white dark:bg-neutral-800 border-slate-100 dark:border-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-neutral-800/60'
-                  }`}
+            sortedLevels.map(lvl => (
+              <div key={lvl} className="space-y-2">
+                <button 
+                  onClick={() => toggleLevel(lvl)}
+                  className="w-full flex items-center justify-between text-xs font-bold text-slate-500 dark:text-neutral-400 px-1 py-1 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer"
                 >
-                  <span className="font-bold text-sm line-clamp-1">{histStory.title}</span>
-                  <div className="flex items-center justify-between w-full text-[10px] font-semibold">
-                    <span className={`px-2 py-0.5 rounded-full border font-bold ${getHskBadgeColors(histStory.targetLevel)}`}>
-                      HSK {histStory.targetLevel === 7 ? '7-9' : histStory.targetLevel}
-                    </span>
-                    <span className="text-slate-400 dark:text-neutral-500">{histStory.tokens?.length || 0} words</span>
-                  </div>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${getHskDotColor(lvl)}`} />
+                    {lvl === 0 ? 'Custom / Legacy' : `HSK ${lvl === 7 ? '7-9' : lvl}`}
+                  </span>
+                  <svg 
+                    className={`w-3.5 h-3.5 transform transition-transform ${openLevels[lvl] !== false ? 'rotate-180' : ''}`} 
+                    fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
                 </button>
-              );
-            })
+                
+                {openLevels[lvl] !== false && (
+                  <div className="space-y-2">
+                    {groupedHistory[lvl].map((histStory) => {
+                      const isActive = story?.storyId === histStory.storyId;
+                      return (
+                        <button
+                          key={histStory.storyId}
+                          onClick={() => {
+                            const originalIdx = storyHistory.findIndex(s => s.storyId === histStory.storyId);
+                            if (originalIdx !== -1) selectStoryFromHistory(originalIdx);
+                          }}
+                          className={`w-full text-left p-3 rounded-xl transition duration-150 border flex flex-col gap-2 cursor-pointer ${
+                            isActive
+                              ? 'bg-blue-50/80 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200'
+                              : 'bg-white dark:bg-neutral-800 border-slate-100 dark:border-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-neutral-800/60'
+                          }`}
+                        >
+                          <span className="font-bold text-sm line-clamp-1">{histStory.title}</span>
+                          <div className="flex items-center justify-between w-full text-[10px] font-semibold">
+                            <span className="text-slate-400 dark:text-neutral-500">{histStory.tokens?.length || 0} words</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))
           )}
         </div>
       </aside>
@@ -278,7 +334,7 @@ export default function HomeReaderPage() {
 
             <div className="flex items-center gap-2">
               {/* Level Selector Dropdown */}
-              <div className="relative group min-w-[140px]">
+              <div className="relative group min-w-35">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                   <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 011.875 1.875v1.5a1.875 1.875 0 01-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875v-1.5c0-1.036.84-1.875 1.875-1.875z" />
@@ -385,7 +441,7 @@ export default function HomeReaderPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 dark:border-neutral-800 pb-3">
               <div>
                 <span className="text-[10px] font-bold tracking-wider text-blue-600 dark:text-blue-400 uppercase">
-                  HSK {story.comprehensionQuestions ? (storyHistory[currentStoryIndex]?.targetLevel === 7 ? '7-9' : storyHistory[currentStoryIndex]?.targetLevel) : 'custom'} Reader
+                  HSK {story.targetLevel ? (story.targetLevel === 7 ? '7-9' : story.targetLevel) : 'custom'} Reader
                 </span>
                 <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">{story.title}</h2>
               </div>
@@ -458,7 +514,7 @@ export default function HomeReaderPage() {
                   >
                     {showPinyin && token.pinyin && (
                       <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-medium block select-none h-4 mb-1">
-                        {token.pinyin.replace(/[0-9]/g, '')}
+                        {convertTonality(token.pinyin)}
                       </span>
                     )}
                     
@@ -622,7 +678,9 @@ export default function HomeReaderPage() {
           <div className="flex justify-between items-start mb-2">
             <div>
               <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{activeToken.text}</h3>
-              <p className="text-blue-600 dark:text-blue-400 font-bold text-sm tracking-wide mt-0.5">{activeToken.pinyin || 'No pinyin'}</p>
+              <p className="text-blue-600 dark:text-blue-400 font-bold text-sm tracking-wide mt-0.5">
+                {activeToken.pinyin ? convertTonality(activeToken.pinyin) : 'No pinyin'}
+              </p>
             </div>
             <button
               onClick={() => setActiveToken(null)}

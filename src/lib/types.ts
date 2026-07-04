@@ -17,6 +17,7 @@ export interface StoryData {
   storyId: string;
   title: string;
   translation: string;
+  targetLevel?: number;
   tokens: Token[];
   newWords: string[];
   comprehensionQuestions?: ComprehensionQuestion[];

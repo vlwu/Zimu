@@ -80,40 +80,40 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-neutral-950">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-500 mt-4 text-sm font-medium">Checking auth state...</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-4 text-sm font-medium">Checking auth state...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl border border-gray-200 shadow-xl">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-neutral-950 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white dark:bg-neutral-900 p-8 rounded-2xl border border-slate-200 dark:border-neutral-800 shadow-xl">
         <div>
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
-            Zimu <span className="text-gray-400 font-normal">字幕</span>
+          <h2 className="text-center text-3xl font-extrabold text-slate-900 dark:text-white">
+            Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
             {isSignUp ? 'Create your new Zimu account' : 'Sign in to your Zimu account'}
           </p>
         </div>
 
         {!isFirebaseConfigured && (
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+          <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 rounded-xl text-amber-800 dark:text-amber-300 text-sm">
             <p className="font-semibold mb-2">⚠️ Local Demo Mode Active</p>
             <p className="mb-4">Firebase environment variables are not configured. You can use the app immediately with a mock profile.</p>
             <div className="mb-4">
-              <label htmlFor="demo-hsk-level" className="block text-sm font-medium text-amber-900 mb-1">
+              <label htmlFor="demo-hsk-level" className="block text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">
                 Current Chinese Level
               </label>
               <select
                 id="demo-hsk-level"
                 value={signUpHskLevel}
                 onChange={(e) => setSignUpHskLevel(Number(e.target.value))}
-                className="block w-full px-3 py-2 bg-white/50 border border-amber-300 rounded-lg text-sm shadow-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-amber-900"
+                className="block w-full px-3 py-2 bg-white/50 dark:bg-neutral-800/50 border border-amber-300 dark:border-amber-700/50 rounded-lg text-sm shadow-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-amber-900 dark:text-amber-100 animate-none"
               >
                 <option value={1}>Beginner (HSK 1)</option>
                 <option value={2}>Elementary (HSK 2)</option>
@@ -141,21 +141,21 @@ export default function LoginPage() {
         {isFirebaseConfigured && (
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center font-medium">
+              <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-sm text-center font-medium">
                 {error}
               </div>
             )}
             <div className="space-y-4">
               {isSignUp && (
                 <div>
-                  <label htmlFor="hsk-level" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="hsk-level" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Current Chinese Level
                   </label>
                   <select
                     id="hsk-level"
                     value={signUpHskLevel}
                     onChange={(e) => setSignUpHskLevel(Number(e.target.value))}
-                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm shadow-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-gray-900 animate-none"
+                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-slate-300 dark:border-neutral-700 rounded-lg text-sm shadow-sm placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-slate-100 animate-none"
                   >
                     <option value={1}>Beginner (HSK 1)</option>
                     <option value={2}>Elementary (HSK 2)</option>
@@ -165,11 +165,11 @@ export default function LoginPage() {
                     <option value={6}>Proficient (HSK 6)</option>
                     <option value={7}>Mastery (HSK 7-9)</option>
                   </select>
-                  <p className="mt-1 text-xs text-gray-500">We'll pre-fill your known words up to this level.</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">We'll pre-fill your known words up to this level.</p>
                 </div>
               )}
               <div>
-                <label htmlFor="email-address" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="email-address" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Email address
                 </label>
                 <input
@@ -180,12 +180,12 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm shadow-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-gray-900 animate-none"
+                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-slate-300 dark:border-neutral-700 rounded-lg text-sm shadow-sm placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-slate-100 animate-none"
                   placeholder="you@example.com"
                 />
               </div>
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Password
                 </label>
                 <input
@@ -196,7 +196,7 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm shadow-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-gray-900 animate-none"
+                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-slate-300 dark:border-neutral-700 rounded-lg text-sm shadow-sm placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-slate-100 animate-none"
                   placeholder="••••••••"
                 />
               </div>
@@ -219,7 +219,7 @@ export default function LoginPage() {
                   setIsSignUp(!isSignUp);
                   setError(null);
                 }}
-                className="text-sm font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
+                className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 cursor-pointer transition-colors"
               >
                 {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
               </button>
