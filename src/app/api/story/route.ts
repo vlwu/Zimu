@@ -20,6 +20,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid targetHskLevel' }, { status: 400 });
     }
 
+    const displayHskLevel = hskLevelParsed === 7 ? '7-9' : String(hskLevelParsed);
+
     // 1. Retrieve the user's previously read story IDs
     const readStoriesSnap = await db.collection('users').doc(userId).collection('readStories').get();
     const readStoryIds = new Set(readStoriesSnap.docs.map(doc => doc.id));
@@ -80,13 +82,13 @@ export async function POST(request: Request) {
       You are an expert Chinese language teacher specializing in graded readers for HSK learners.
 
       # Task
-      Write one compelling, coherent short story in Simplified Chinese, calibrated for a student at HSK level ${hskLevelParsed}.
+      Write one compelling, coherent short story in Simplified Chinese, calibrated for a student at HSK level ${displayHskLevel}.
 
       # Vocabulary Constraints (strict)
       - Known words: the student already knows these words: [${knownWords.join(', ')}].
       - Foundation: Construct the story primarily from the known words list plus basic/common words from HSK levels BELOW level ${hskLevelParsed}.
       - New words: Introduce exactly 3 to 6 NEW words that:
-        1. Belong specifically to HSK level ${hskLevelParsed}.
+        1. Belong specifically to HSK level ${displayHskLevel}.
         2. Do NOT appear in the known words list.
         3. Are essential to the story rather than arbitrarily inserted (use them because they naturally fit, not just to hit the quota).
       - Do not use any vocabulary from HSK levels ABOVE ${hskLevelParsed}.
@@ -101,7 +103,7 @@ export async function POST(request: Request) {
 
       # Quality Bar
       - The story must read naturally and coherently, as if written for native graded-reader materials — never force or twist the plot just to satisfy a vocabulary boundary.
-      - Prefer simple, clear sentence structures appropriate for HSK ${hskLevelParsed} grammar patterns.
+      - Prefer simple, clear sentence structures appropriate for HSK ${displayHskLevel} grammar patterns.
       - The story should have a clear beginning, middle, and end (or a clear narrative arc) despite its short length.
       - Avoid proper nouns, idioms, or cultural references that would require vocabulary outside the allowed set.
 
@@ -118,7 +120,7 @@ export async function POST(request: Request) {
       // Adjust prompt content based on validation feedback from prior runs
       const userPrompt = attempts === 1
         ? 'Please write a new story following the instructions.'
-        : `Your previous response included out-of-level vocabulary words that are too advanced for the student. Please rewrite the story. Crucially, do NOT use any of these forbidden words: [${forbiddenWordsUsed.join(', ')}]. Make sure all characters used strictly align with HSK level ${hskLevelParsed} or below, or the known words list.`;
+        : `Your previous response included out-of-level vocabulary words that are too advanced for the student. Please rewrite the story. Crucially, do NOT use any of these forbidden words: [${forbiddenWordsUsed.join(', ')}]. Make sure all characters used strictly align with HSK level ${displayHskLevel} or below, or the known words list.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',

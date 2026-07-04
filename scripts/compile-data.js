@@ -3,7 +3,7 @@ const path = require('path');
 const readline = require('readline');
 
 const CEDICT_PATH = path.join(__dirname, '../data/cc-cedict.u8');
-const HSK_PATH = path.join(__dirname, '../data/hsk3.csv'); // Adjust filename if different
+const HSK_PATH = path.join(__dirname, '../data/hsk.csv');
 const OUTPUT_PATH = path.join(__dirname, '../data/dictionary.json'); // Outside of /src to bypass the bundler!
 
 async function parseHSK() {
@@ -42,7 +42,7 @@ async function parseHSK() {
     if (parts.length > Math.max(hanziIndex, levelIndex)) {
       const word = parts[hanziIndex]?.trim();
       const levelRaw = parts[levelIndex]?.trim();
-      const levelParsed = parseInt(levelRaw?.replace(/\D/g, '') || '', 10);
+      const levelParsed = levelRaw === '7-9' ? 7 : parseInt(levelRaw?.replace(/\D/g, '') || '', 10);
 
       if (word && !isNaN(levelParsed)) {
         hskMap.set(word, levelParsed);

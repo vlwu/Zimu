@@ -34,7 +34,7 @@ export function loadVocabulary(): Map<string, DictEntry> {
           if (hanzi) {
             vocabMap.set(hanzi, {
               hanzi,
-              level: Number(levelStr) || 1,
+              level: levelStr === '7-9' ? 7 : (Number(levelStr) || 1),
             });
           }
         }
@@ -47,7 +47,7 @@ export function loadVocabulary(): Map<string, DictEntry> {
               level = Number(val[0]) || 1;
             } else {
               const rawLevel = (val as any).level ?? (val as any).Level ?? (val as any).l ?? (val as any).level_3_0;
-              level = Number(rawLevel) || 1;
+              level = rawLevel === '7-9' ? 7 : (Number(rawLevel) || 1);
             }
           } else if (typeof val === 'number') {
             level = val;
@@ -77,7 +77,7 @@ export function loadVocabulary(): Map<string, DictEntry> {
           if (parts.length >= 2) {
             const hanzi = parts[0].trim();
             const levelStr = parts[1].trim();
-            const level = Number(levelStr) || 1;
+            const level = levelStr === '7-9' ? 7 : (Number(levelStr) || 1);
             if (hanzi && hanzi !== 'Hanzi') {
               vocabMap.set(hanzi, { hanzi, level });
             }

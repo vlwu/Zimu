@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Token, ComprehensionQuestion } from '@/lib/types';
 import { useUserProgress } from '@/context/UserProgressContext';
@@ -17,15 +17,22 @@ export default function HomeReaderPage() {
   } = useUserProgress();
 
   const [showPinyin, setShowPinyin] = useState(true);
-  const [colorCodeHsk, setColorCodeHsk] = useState(false);
+  const [colorCodeHsk, setColorCodeHsk] = useState(true);
   const [activeToken, setActiveToken] = useState<Token | null>(null);
   const [loading, setLoading] = useState(false);
+  
   const [story, setStory] = useState<{
+    storyId: string;
     title: string;
     translation: string;
     tokens: Token[];
     comprehensionQuestions?: ComprehensionQuestion[];
   } | null>(null);
+
+  // Story History states
+  const [storyHistory, setStoryHistory] = useState<any[]>([]);
+  const [currentStoryIndex, setCurrentStoryIndex] = useState<number>(-1);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Speech and Quiz tracking states
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -33,12 +40,41 @@ export default function HomeReaderPage() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [isStoryCompleted, setIsStoryCompleted] = useState(false);
 
+  // TTS Ref to bypass Garbage Collection in Chromium-based browsers
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
   // Client-side route guard: redirect if loading is finished and no user exists
   useEffect(() => {
     if (!userProgressLoading && !userId) {
       router.push('/login');
     }
   }, [userId, userProgressLoading, router]);
+
+  // Load reading history from localStorage scoped to user ID on mount
+  useEffect(() => {
+    if (userId) {
+      const stored = localStorage.getItem(`zimu_history_${userId}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setStoryHistory(parsed);
+            setStory(parsed[0]);
+            setCurrentStoryIndex(0);
+          }
+        } catch (e) {
+          console.error('Failed to load story history:', e);
+        }
+      }
+    }
+  }, [userId]);
+
+  // Sync reading history changes with localStorage
+  useEffect(() => {
+    if (userId && storyHistory.length > 0) {
+      localStorage.setItem(`zimu_history_${userId}`, JSON.stringify(storyHistory));
+    }
+  }, [storyHistory, userId]);
 
   // Clean up native speech synthesis on unmount
   useEffect(() => {
@@ -51,7 +87,7 @@ export default function HomeReaderPage() {
     if (!userId) return;
     setLoading(true);
     
-    // Stop any ongoing speech
+    // Stop any active TTS audio
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
 
@@ -72,6 +108,14 @@ export default function HomeReaderPage() {
       const data = await res.json();
       if (res.ok) {
         setStory(data);
+        
+        // Append to reading history
+        setStoryHistory(prev => {
+          const alreadyExists = prev.some(item => item.storyId === data.storyId);
+          if (alreadyExists) return prev;
+          return [data, ...prev];
+        });
+        setCurrentStoryIndex(0);
       } else {
         alert(data.error || 'Failed to generate story.');
       }
@@ -82,21 +126,71 @@ export default function HomeReaderPage() {
     }
   };
 
+  const selectStoryFromHistory = (index: number) => {
+    const selected = storyHistory[index];
+    if (!selected) return;
+
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setIsStoryCompleted(false);
+
+    setStory(selected);
+    setCurrentStoryIndex(index);
+    setIsHistoryOpen(false); // Auto close sidebar drawer on mobile
+  };
+
   const handleSpeak = () => {
     if (!story) return;
+
+    // Reset synthesis engine safely
+    window.speechSynthesis.cancel();
+
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
     }
 
     const textToSpeak = story.tokens.map(t => t.text).join('');
+    if (!textToSpeak.trim()) return;
+
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.lang = 'zh-CN';
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    
-    setIsSpeaking(true);
+    utterance.rate = 0.85; // Calibrated comfort pace for learners
+
+    // Attempt to lock native Chinese voice if found locally
+    const voices = window.speechSynthesis.getVoices();
+    const chineseVoice = voices.find(v => 
+      v.lang.toLowerCase().includes('zh-cn') || 
+      v.lang.toLowerCase().includes('zh-hans') || 
+      v.lang.toLowerCase().startsWith('zh')
+    );
+    if (chineseVoice) {
+      utterance.voice = chineseVoice;
+    }
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      utteranceRef.current = null;
+    };
+
+    utterance.onerror = (e) => {
+      console.warn('Speech synthesis notification:', e);
+      setIsSpeaking(false);
+      utteranceRef.current = null;
+    };
+
+    // Retain object reference locally and globally to bypass GC
+    utteranceRef.current = utterance;
+    if (typeof window !== 'undefined') {
+      (window as any)._zimuActiveUtterance = utterance;
+    }
+
     window.speechSynthesis.speak(utterance);
   };
 
@@ -106,113 +200,245 @@ export default function HomeReaderPage() {
   };
 
   const getHskColorClass = (hsk: number | null | undefined) => {
-    if (!hsk) return 'hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-800 dark:text-gray-200';
+    if (!hsk) return 'hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-800 dark:text-neutral-200';
     switch (hsk) {
       case 1:
-        return 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 border-b-2 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40';
+        return 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border-b-2 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30';
       case 2:
-        return 'bg-sky-50 dark:bg-sky-950/30 text-sky-900 dark:text-sky-200 border-b-2 border-sky-300 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/40';
+        return 'bg-sky-50 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300 border-b-2 border-sky-300 dark:border-sky-800 hover:bg-sky-100/70 dark:hover:bg-sky-900/30';
       case 3:
-        return 'bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border-b-2 border-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40';
-      default:
-        return 'bg-purple-50 dark:bg-purple-950/30 text-purple-900 dark:text-purple-200 border-b-2 border-purple-300 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40';
+        return 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border-b-2 border-amber-300 dark:border-amber-800 hover:bg-amber-100/70 dark:hover:bg-amber-900/30';
+      case 4:
+        return 'bg-orange-50 dark:bg-orange-950/20 text-orange-800 dark:text-orange-300 border-b-2 border-orange-300 dark:border-orange-800 hover:bg-orange-100/70 dark:hover:bg-orange-900/30';
+      case 5:
+        return 'bg-rose-50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300 border-b-2 border-rose-300 dark:border-rose-800 hover:bg-rose-100/70 dark:hover:bg-rose-900/30';
+      case 6:
+        return 'bg-violet-50 dark:bg-violet-950/20 text-violet-800 dark:text-violet-300 border-b-2 border-violet-300 dark:border-violet-800 hover:bg-violet-100/70 dark:hover:bg-violet-900/30';
+      default: // HSK 7-9 (represented by targetHskLevel 7)
+        return 'bg-fuchsia-50 dark:bg-fuchsia-950/20 text-fuchsia-800 dark:text-fuchsia-300 border-b-2 border-fuchsia-300 dark:border-fuchsia-800 hover:bg-fuchsia-100/70 dark:hover:bg-fuchsia-900/30';
     }
   };
 
   if (userProgressLoading || !userId) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-neutral-950">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-500 mt-4 text-sm font-medium">Loading user profile...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-slate-500 mt-4 text-sm font-semibold tracking-wide">Synchronizing profile...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 min-h-screen flex flex-col justify-between">
-      <div>
-        <header className="flex justify-between items-center mb-6 border-b pb-4">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-            Zimu <span className="text-gray-400 font-normal">字幕</span>
-          </h1>
-          <div className="flex gap-2 sm:gap-4 items-center">
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="hsk-select" className="text-xs sm:text-sm font-medium text-gray-700">Target:</label>
+    <div className="min-h-screen bg-slate-50 dark:bg-neutral-950 flex flex-col md:flex-row">
+      
+      {/* Drawer Overlay for Mobile History */}
+      {isHistoryOpen && (
+        <div 
+          className="fixed inset-0 bg-neutral-900/40 z-40 md:hidden backdrop-blur-xs"
+          onClick={() => setIsHistoryOpen(false)}
+        />
+      )}
+
+      {/* History Sidebar Panel */}
+      <aside className={`fixed inset-y-0 left-0 w-72 bg-white dark:bg-neutral-900 border-r border-slate-200 dark:border-neutral-800 z-50 transform transition-transform duration-300 md:relative md:transform-none md:z-0 flex flex-col ${
+        isHistoryOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
+        <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-slate-50/50 dark:bg-neutral-900/50">
+          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            </svg>
+            <span>Story History</span>
+          </h3>
+          <button 
+            onClick={() => setIsHistoryOpen(false)}
+            className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {storyHistory.length === 0 ? (
+            <div className="text-center py-8 px-4">
+              <p className="text-xs text-slate-400 dark:text-neutral-500">No previously generated stories. Your history will be recorded as you read.</p>
+            </div>
+          ) : (
+            storyHistory.map((histStory, idx) => {
+              const isActive = story?.storyId === histStory.storyId;
+              return (
+                <button
+                  key={histStory.storyId}
+                  onClick={() => selectStoryFromHistory(idx)}
+                  className={`w-full text-left p-3 rounded-xl transition duration-150 border flex flex-col gap-1.5 cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-50/80 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200'
+                      : 'bg-white dark:bg-neutral-800 border-slate-100 dark:border-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-neutral-800/60'
+                  }`}
+                >
+                  <span className="font-bold text-sm line-clamp-1">{histStory.title}</span>
+                  <div className="flex items-center justify-between w-full text-[10px] font-semibold text-slate-400 dark:text-neutral-500">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-neutral-700">
+                      HSK {histStory.targetLevel === 7 ? '7-9' : histStory.targetLevel}
+                    </span>
+                    <span>{histStory.tokens?.length || 0} words</span>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 max-w-4xl mx-auto w-full p-4 sm:p-6 lg:p-8">
+        
+        {/* Navigation & Toolbar Header */}
+        <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200 dark:border-neutral-800 gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+              className="md:hidden p-2 rounded-lg bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+              title="Toggle History"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg p-1">
+              <label htmlFor="hsk-select" className="text-xs font-semibold text-slate-500 dark:text-neutral-400 px-2">Level:</label>
               <select
                 id="hsk-select"
                 value={targetHskLevel}
                 onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
-                className="px-1.5 py-1 text-xs sm:text-sm bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition cursor-pointer font-medium text-gray-900"
+                className="pl-1 pr-3 py-1 text-xs sm:text-sm bg-transparent border-none transition cursor-pointer font-bold text-slate-800 dark:text-slate-100 focus:outline-none"
               >
                 <option value={1}>HSK 1</option>
                 <option value={2}>HSK 2</option>
                 <option value={3}>HSK 3</option>
+                <option value={4}>HSK 4</option>
+                <option value={5}>HSK 5</option>
+                <option value={6}>HSK 6</option>
+                <option value={7}>HSK 7-9</option>
               </select>
             </div>
+
             <button
               onClick={fetchNewStory}
               disabled={loading}
-              className="px-3 py-1 text-xs sm:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition font-medium cursor-pointer"
+              className="px-4 py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all font-semibold shadow-xs shadow-blue-500/20 cursor-pointer flex items-center gap-1.5"
             >
-              {loading ? 'Generating...' : 'Next Story'}
+              {loading ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  <span>New Story</span>
+                </>
+              )}
             </button>
+
             <button
               onClick={logout}
-              className="px-2.5 py-1 text-xs sm:text-sm bg-red-50 hover:bg-red-100 text-red-600 rounded-md transition font-medium cursor-pointer"
+              className="p-2 text-slate-500 hover:text-red-600 dark:text-neutral-400 dark:hover:text-red-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+              title="Logout"
             >
-              Logout
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
             </button>
           </div>
         </header>
 
         {story ? (
           <main className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 pb-3">
-              <h2 className="text-xl font-extrabold text-gray-900 dark:text-gray-100">{story.title}</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 dark:border-neutral-800 pb-3">
+              <div>
+                <span className="text-[10px] font-bold tracking-wider text-blue-600 dark:text-blue-400 uppercase">
+                  HSK {story.comprehensionQuestions ? (storyHistory[currentStoryIndex]?.targetLevel === 7 ? '7-9' : storyHistory[currentStoryIndex]?.targetLevel) : 'custom'} Reader
+                </span>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">{story.title}</h2>
+              </div>
               
-              {/* Reading Experience Toolbar */}
-              <div className="flex flex-wrap gap-2">
+              {/* Interactive Toolbar Options */}
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => setShowPinyin(!showPinyin)}
-                  className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition duration-150 flex items-center gap-1 ${
                     showPinyin
                       ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900'
-                      : 'bg-white border-gray-200 text-gray-700 dark:bg-neutral-800 dark:text-gray-300 dark:border-neutral-700'
+                      : 'bg-white border-slate-200 text-slate-700 dark:bg-neutral-900 dark:text-slate-300 dark:border-neutral-800'
                   }`}
                 >
-                  {showPinyin ? 'Pinyin On' : 'Pinyin Off'}
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>{showPinyin ? 'Pinyin' : 'No Pinyin'}</span>
                 </button>
+
                 <button
                   onClick={() => setColorCodeHsk(!colorCodeHsk)}
-                  className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition duration-150 flex items-center gap-1 ${
                     colorCodeHsk
                       ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900'
-                      : 'bg-white border-gray-200 text-gray-700 dark:bg-neutral-800 dark:text-gray-300 dark:border-neutral-700'
+                      : 'bg-white border-slate-200 text-slate-700 dark:bg-neutral-900 dark:text-slate-300 dark:border-neutral-800'
                   }`}
                 >
-                  {colorCodeHsk ? 'Color Code On' : 'Color Code Off'}
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.01-1.25a15.998 15.998 0 011.355-1.758m1.355-1.758a15.998 15.998 0 012.3-1.624m2.3-1.624a15.997 15.997 0 012.87-1.472m-3.41 1.745a15.986 15.986 0 00-2.87 2.228m-2.87 2.228a15.986 15.986 0 00-1.625 2.383m-1.625 2.383a15.986 15.986 0 00-1.1 2.875m-.385-11.49a3.75 3.75 0 114.95 4.95l-4.95-4.95z" />
+                  </svg>
+                  <span>{colorCodeHsk ? 'Color Code' : 'Monochrome'}</span>
                 </button>
+
                 <button
                   onClick={handleSpeak}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition duration-150 ${
                     isSpeaking
-                      ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900 animate-pulse'
-                      : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/40 dark:text-green-300'
+                      ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900 animate-pulse'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900'
                   }`}
                 >
-                  <span>{isSpeaking ? '⏹ Stop' : '🔊 Listen'}</span>
+                  {isSpeaking ? (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                      </svg>
+                      <span>Stop</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+                      </svg>
+                      <span>Listen</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
             
-            {/* Main Interactive Reader Block with comfortable character layout */}
-            <div className="flex flex-wrap gap-y-7 gap-x-2 leading-[2.5] text-2xl sm:text-3xl tracking-wide select-none p-5 sm:p-7 rounded-2xl bg-gray-50 dark:bg-neutral-900 border border-gray-100 dark:border-neutral-800/80 shadow-inner">
+            {/* Interactive Reader Block */}
+            <div className="flex flex-wrap gap-y-8 gap-x-2.5 leading-[2.6] text-2xl sm:text-3xl tracking-wide select-none p-5 sm:p-8 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-xs">
               {story.tokens.map((token, index) => {
                 if (!token.isWord) {
                   return (
-                    <span key={index} className="text-gray-400 dark:text-gray-500 self-end mb-1">
+                    <span key={index} className="text-slate-400 dark:text-neutral-500 self-end mb-1 font-medium">
                       {token.text}
                     </span>
                   );
@@ -222,41 +448,51 @@ export default function HomeReaderPage() {
                   <span
                     key={index}
                     onClick={() => setActiveToken(token)}
-                    className={`group relative inline-flex flex-col items-center cursor-pointer rounded px-1.5 pb-0.5 transition duration-150 ${
+                    className={`group relative inline-flex flex-col items-center cursor-pointer rounded-lg px-2 pb-0.5 transition-all duration-150 ${
                       colorCodeHsk
                         ? getHskColorClass(token.hsk)
-                        : 'hover:bg-yellow-100 dark:hover:bg-neutral-800 text-gray-800 dark:text-gray-200'
+                        : 'hover:bg-amber-100/60 dark:hover:bg-neutral-800 text-slate-800 dark:text-slate-200'
                     }`}
                   >
                     {showPinyin && token.pinyin && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400 font-light block select-none h-4 mb-0.5">
+                      <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-medium block select-none h-4 mb-1">
                         {token.pinyin.replace(/[0-9]/g, '')}
                       </span>
                     )}
-                    <span className="font-semibold">{token.text}</span>
+                    <span className="font-semibold tracking-wider">{token.text}</span>
                   </span>
                 );
               })}
             </div>
 
-            <details className="p-4 bg-gray-50 dark:bg-neutral-900/40 border border-gray-100 dark:border-neutral-800 rounded-xl text-gray-700 dark:text-gray-300">
-              <summary className="cursor-pointer text-sm font-semibold select-none">
-                Show Story Translation
+            <details className="p-4 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-xl text-slate-700 dark:text-slate-300 shadow-2xs group">
+              <summary className="cursor-pointer text-sm font-bold select-none flex items-center justify-between">
+                <span>View Story English Translation</span>
+                <svg className="w-4 h-4 text-slate-400 transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
               </summary>
-              <p className="mt-2 text-base leading-relaxed italic">{story.translation}</p>
+              <p className="mt-3 text-base leading-relaxed text-slate-600 dark:text-neutral-400 italic bg-slate-50 dark:bg-neutral-900/50 p-3.5 rounded-lg border border-slate-100 dark:border-neutral-800">
+                &ldquo;{story.translation}&rdquo;
+              </p>
             </details>
 
-            {/* Comprehension Quiz block */}
+            {/* Comprehension Quiz section */}
             {story.comprehensionQuestions && story.comprehensionQuestions.length > 0 && (
-              <section className="mt-8 border-t pt-6 space-y-6">
+              <section className="mt-8 border-t border-slate-200 dark:border-neutral-800 pt-6 space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <h3 className="text-lg font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <span>Comprehension Check</span>
-                    <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">3 Qs</span>
+                    <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2.5 py-0.5 rounded-full font-bold">
+                      3 Challenges
+                    </span>
                   </h3>
                   {isStoryCompleted && (
-                    <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2.5 py-0.5 rounded-full font-bold">
-                      ✓ Story Completed
+                    <span className="text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                      <span>Story Completed</span>
                     </span>
                   )}
                 </div>
@@ -267,28 +503,28 @@ export default function HomeReaderPage() {
                     const isAnswered = selectedIdx !== undefined;
 
                     return (
-                      <div key={qIndex} className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-neutral-800 bg-gray-50/50 dark:bg-neutral-900/20 space-y-3">
-                        <p className="font-bold text-gray-800 dark:text-gray-200">
-                          {qIndex + 1}. {q.question}
+                      <div key={qIndex} className="p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xs space-y-4">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-base leading-relaxed">
+                          <span className="text-blue-600 dark:text-blue-400 mr-1.5 font-black">{qIndex + 1}.</span> {q.question}
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           {q.options.map((option, optIndex) => {
                             const isCorrect = optIndex === q.answerIndex;
                             const isSelected = selectedIdx === optIndex;
                             
-                            let btnStyle = "bg-white dark:bg-neutral-800 border-gray-200 dark:border-neutral-700 hover:bg-gray-100 dark:hover:bg-neutral-700 text-gray-700 dark:text-gray-300";
+                            let btnStyle = "bg-slate-50 dark:bg-neutral-800 border-slate-200 dark:border-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-700/80 text-slate-700 dark:text-slate-300";
                             
                             if (quizSubmitted) {
                               if (isCorrect) {
-                                btnStyle = "bg-green-50 dark:bg-green-950/30 border-green-500 text-green-800 dark:text-green-200 font-semibold";
+                                btnStyle = "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500 text-emerald-800 dark:text-emerald-200 font-bold";
                               } else if (isSelected) {
-                                btnStyle = "bg-red-50 dark:bg-red-950/30 border-red-500 text-red-800 dark:text-red-200";
+                                btnStyle = "bg-rose-50 dark:bg-rose-950/20 border-rose-500 text-rose-800 dark:text-rose-200 font-bold";
                               } else {
-                                btnStyle = "bg-white dark:bg-neutral-800 border-gray-100 dark:border-neutral-800 opacity-50 text-gray-400 dark:text-gray-500";
+                                btnStyle = "bg-slate-50 dark:bg-neutral-800/40 border-slate-100 dark:border-neutral-800/40 opacity-40 text-slate-400 dark:text-neutral-500";
                               }
                             } else {
                               if (isSelected) {
-                                btnStyle = "bg-blue-50 dark:bg-blue-950/40 border-blue-600 text-blue-950 dark:text-blue-100 font-bold";
+                                btnStyle = "bg-blue-50 dark:bg-blue-950/30 border-blue-600 text-blue-900 dark:text-blue-100 font-bold ring-2 ring-blue-500/20";
                               }
                             }
 
@@ -299,9 +535,9 @@ export default function HomeReaderPage() {
                                 onClick={() => {
                                   setQuizAnswers(prev => ({ ...prev, [qIndex]: optIndex }));
                                 }}
-                                className={`w-full text-left px-4 py-2.5 rounded-xl border text-sm transition-all flex items-center gap-2 cursor-pointer ${btnStyle}`}
+                                className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all duration-150 flex items-center gap-3 cursor-pointer ${btnStyle}`}
                               >
-                                <span className="font-extrabold text-xs bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400">
+                                <span className="font-black text-xs bg-slate-200/60 dark:bg-neutral-700/60 px-2 py-0.5 rounded text-slate-600 dark:text-neutral-400">
                                   {String.fromCharCode(65 + optIndex)}
                                 </span>
                                 <span>{option}</span>
@@ -311,7 +547,7 @@ export default function HomeReaderPage() {
                         </div>
 
                         {quizSubmitted && (
-                          <div className="mt-2 p-3 bg-blue-50/50 dark:bg-blue-950/10 border-l-2 border-blue-500 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                          <div className="mt-2 p-4 bg-blue-50/50 dark:bg-blue-950/15 border-l-4 border-blue-500 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 leading-relaxed rounded-r-xl">
                             <span className="font-bold text-blue-800 dark:text-blue-300">Explanation:</span> {q.explanation}
                           </div>
                         )}
@@ -325,19 +561,25 @@ export default function HomeReaderPage() {
                     <button
                       onClick={() => {
                         if (Object.keys(quizAnswers).length < story.comprehensionQuestions!.length) {
-                          alert('Please answer all 3 questions first!');
+                          alert('Please complete all questions before submitting.');
                           return;
                         }
                         setQuizSubmitted(true);
                         setIsStoryCompleted(true);
                       }}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition cursor-pointer text-sm shadow-md shadow-blue-500/10"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl transition duration-150 text-sm shadow-md shadow-blue-500/15 cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      Submit Answers & Complete Story
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Submit Answers & Finish Story</span>
                     </button>
                   ) : (
-                    <div className="w-full text-center py-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 text-green-800 dark:text-green-300 rounded-xl font-extrabold text-sm">
-                      🎉 Challenge completed! Tap &quot;Next Story&quot; to continue reading.
+                    <div className="w-full text-center py-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5">
+                      <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Excellent! Challenge finished. Click &quot;New Story&quot; above to keep learning.</span>
                     </div>
                   )}
                 </div>
@@ -345,48 +587,53 @@ export default function HomeReaderPage() {
             )}
           </main>
         ) : (
-          <div className="text-center py-20 border-2 border-dashed rounded-xl bg-gray-50">
-            <p className="text-gray-500 mb-4">Click below to generate your first custom story based on your vocabulary level.</p>
+          <div className="text-center py-20 px-6 border-2 border-dashed border-slate-200 dark:border-neutral-800 rounded-2xl bg-white dark:bg-neutral-900/50 shadow-inner">
+            <svg className="w-12 h-12 text-slate-300 dark:text-neutral-700 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            </svg>
+            <p className="text-slate-500 dark:text-neutral-400 mb-5 max-w-sm mx-auto text-sm leading-relaxed">
+              No active story loaded. Select your target language level and generate your first custom contextual story.
+            </p>
             <button
               onClick={fetchNewStory}
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer"
+              className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition duration-150 cursor-pointer shadow-md shadow-blue-500/10"
             >
-              {loading ? 'Generating your story...' : 'Generate First Story'}
+              {loading ? 'Creating custom reader...' : 'Generate First Story'}
             </button>
           </div>
         )}
       </div>
 
       {activeToken && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-lg bg-white border border-gray-200 shadow-2xl p-6 rounded-2xl">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-lg bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-2xl p-6 rounded-2xl z-50">
           <div className="flex justify-between items-start mb-2">
             <div>
-              <h3 className="text-2xl font-bold text-gray-900">{activeToken.text}</h3>
-              <p className="text-gray-500 italic mt-0.5">{activeToken.pinyin || 'No pinyin'}</p>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{activeToken.text}</h3>
+              <p className="text-blue-600 dark:text-blue-400 font-bold text-sm tracking-wide mt-0.5">{activeToken.pinyin || 'No pinyin'}</p>
             </div>
             <button
               onClick={() => setActiveToken(null)}
-              className="text-gray-400 hover:text-gray-600 text-2xl font-bold cursor-pointer"
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl font-bold cursor-pointer"
             >
               &times;
             </button>
           </div>
 
-          <p className="text-gray-700 text-base mb-4 leading-relaxed">
+          <p className="text-slate-600 dark:text-neutral-300 text-base mb-5 leading-relaxed bg-slate-50 dark:bg-neutral-800/40 p-3 rounded-lg border border-slate-100 dark:border-neutral-800/80 mt-2">
             {activeToken.definition || 'Definition not available.'}
           </p>
 
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-3">
             <button
               onClick={() => markWordAsKnown(activeToken.text)}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 px-4 rounded-xl transition cursor-pointer"
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-3 px-4 rounded-xl transition duration-150 cursor-pointer shadow-xs shadow-emerald-500/15 text-center"
             >
               I know this word
             </button>
             {activeToken.hsk && (
-              <span className="px-3 py-2 bg-yellow-50 text-yellow-800 rounded-xl text-xs font-semibold flex items-center justify-center border border-yellow-200">
-                HSK {activeToken.hsk}
+              <span className="px-4 py-3 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center border border-amber-200 dark:border-amber-900/60">
+                HSK {activeToken.hsk === 7 ? '7-9' : activeToken.hsk}
               </span>
             )}
           </div>
