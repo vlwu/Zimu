@@ -129,10 +129,6 @@ export function StoryView({
           </button>
         </div>
       </div>
-
-      <div className="text-xs bg-blue-50/50 dark:bg-blue-950/10 text-slate-500 dark:text-neutral-400 p-3 rounded-lg border border-slate-100 dark:border-neutral-800 text-center select-none font-medium">
-        💡 <span className="font-semibold text-slate-700 dark:text-slate-300">Quick tip:</span> Double-click any word to instantly toggle your known words.
-      </div>
       
       {/* Interactive Reader Block */}
       <div className="flex flex-wrap gap-y-10 gap-x-3 leading-[2.6] text-2xl sm:text-3xl tracking-wide select-none p-5 sm:p-8 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-xs">

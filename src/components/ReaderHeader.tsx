@@ -13,6 +13,7 @@ interface ReaderHeaderProps {
   storyLength: 'short' | 'medium' | 'long';
   setStoryLength: (len: 'short' | 'medium' | 'long') => void;
   setShowApiKeyModal?: (val: boolean) => void;
+  setShowTipsModal?: (val: boolean) => void;
 }
 
 export function ReaderHeader({
@@ -28,6 +29,7 @@ export function ReaderHeader({
   storyLength,
   setStoryLength,
   setShowApiKeyModal,
+  setShowTipsModal,
 }: ReaderHeaderProps) {
   return (
     <header className="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-neutral-800">
@@ -94,6 +96,17 @@ export function ReaderHeader({
                 <span>New Story</span>
               </>
             )}
+          </button>
+
+          {/* Quick Study Tips Toggle Button */}
+          <button
+            onClick={() => setShowTipsModal?.(true)}
+            className="p-2 text-slate-500 hover:text-amber-500 dark:text-neutral-400 dark:hover:text-amber-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+            title="Quick Study Tips"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707-.707M12 5a7 7 0 00-7 7c0 2.902 1.86 5.37 4.433 6.273a.75.75 0 00.567-.04V20a1 1 0 001 1h2a1 1 0 001-1v-1.767a.75.75 0 00.567.04A7.001 7.001 0 0012 5z" />
+            </svg>
           </button>
 
           {/* Gemini API Key Settings Panel Toggle */}

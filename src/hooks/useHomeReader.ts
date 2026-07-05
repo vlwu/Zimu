@@ -59,6 +59,7 @@ export function useHomeReader() {
   // Gemini Onboarding & API Key Modal States
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [apiKeySetupSkipped, setApiKeySetupSkipped] = useState(false);
+  const [showTipsModal, setShowTipsModal] = useState(false);
 
   // Client-side route guard: redirect if loading is finished and no user exists
   useEffect(() => {
@@ -347,6 +348,8 @@ export function useHomeReader() {
     setShowApiKeyModal,
     apiKeySetupSkipped,
     setApiKeySetupSkipped,
+    showTipsModal,
+    setShowTipsModal,
 
     fetchNewStory,
     startFlashcardSession,

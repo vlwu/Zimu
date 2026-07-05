@@ -3,6 +3,9 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { db } from '@/lib/firebase-admin';
 import { segmentChinese } from '@/lib/segmenter-server';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export async function POST(request: Request) {
   try {
     const { userId, targetHskLevel, storyLength } = await request.json();
@@ -23,9 +26,13 @@ export async function POST(request: Request) {
     
     let geminiApiKey = userData?.geminiApiKey;
 
-    // Developer fallback for local testing
-    if (!geminiApiKey && process.env.NODE_ENV === 'development') {
-      geminiApiKey = process.env.GEMINI_API_KEY;
+    // Use environment variable as a system-wide fallback only in local development or production,
+    // but strictly block it on Vercel Preview deployments to prevent quota drainage.
+    if (!geminiApiKey && process.env.GEMINI_API_KEY) {
+      const isVercelPreview = process.env.VERCEL_ENV === 'preview';
+      if (!isVercelPreview) {
+        geminiApiKey = process.env.GEMINI_API_KEY;
+      }
     }
 
     if (!geminiApiKey) {
@@ -177,15 +184,7 @@ export async function POST(request: Request) {
       });
     } catch (apiError: any) {
       console.error('Gemini API call failed:', apiError);
-      const msg = apiError.message || '';
-      const isAuthError = apiError.status === 400 || apiError.status === 403 || msg.toLowerCase().includes('api key') || msg.toLowerCase().includes('apikey') || msg.toLowerCase().includes('auth');
-      if (isAuthError) {
-        return NextResponse.json({
-          error: 'Your Gemini API Key is invalid or expired. Please verify and try again.',
-          code: 'INVALID_API_KEY'
-        }, { status: 401 });
-      }
-      return NextResponse.json({ error: apiError.message || 'Error occurred during story generation.' }, { status: 500 });
+      throw apiError;
     }
 
     const outputText = response.text;
