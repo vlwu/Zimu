@@ -17,6 +17,8 @@ interface UserProgressContextType {
   loginDemo: (level?: number) => Promise<void>;
   flashcardProgress: Record<string, { interval: number; repetition: number; efactor: number; dueDate: string }>;
   saveFlashcardProgress: (word: string, interval: number, repetition: number, efactor: number, dueDate: string) => Promise<void>;
+  geminiApiKey: string | null;
+  updateGeminiApiKey: (key: string | null) => Promise<void>;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
@@ -26,6 +28,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   const [knownWords, setKnownWords] = useState<string[]>([]);
   const [targetHskLevel, setTargetHskLevel] = useState<number>(3);
   const [flashcardProgress, setFlashcardProgress] = useState<Record<string, { interval: number; repetition: number; efactor: number; dueDate: string }>>({});
+  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Synchronize on Auth state changes if Firebase is configured
@@ -52,6 +55,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       setKnownWords([]);
       setTargetHskLevel(3);
       setFlashcardProgress({});
+      setGeminiApiKey(null);
       setLoading(false);
       return;
     }
@@ -75,6 +79,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         } else {
           setFlashcardProgress({});
         }
+
+        const storedApiKey = localStorage.getItem('zimu_gemini_api_key_test-user-id');
+        setGeminiApiKey(storedApiKey || null);
         
         setLoading(false);
         return;
@@ -88,9 +95,11 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           const data = docSnap.data();
           setKnownWords(data.knownWords || []);
           setTargetHskLevel(data.targetHskLevel || 3);
+          setGeminiApiKey(data.geminiApiKey || null);
         } else {
           setKnownWords([]);
           setTargetHskLevel(3);
+          setGeminiApiKey(null);
         }
 
         // Fetch subcollection flashcards
@@ -192,6 +201,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
     setUserId(null);
     setFlashcardProgress({});
+    setGeminiApiKey(null);
   };
 
   const loginDemo = async (level: number = 3) => {
@@ -209,6 +219,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     } else {
       setFlashcardProgress({});
     }
+
+    const storedApiKey = localStorage.getItem('zimu_gemini_api_key_test-user-id');
+    setGeminiApiKey(storedApiKey || null);
 
     try {
       const res = await fetch('/api/init-user', {
@@ -265,6 +278,28 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const updateGeminiApiKey = async (key: string | null) => {
+    if (!userId) return;
+
+    setGeminiApiKey(key);
+    if (key) {
+      localStorage.setItem(`zimu_gemini_api_key_${userId}`, key);
+    } else {
+      localStorage.removeItem(`zimu_gemini_api_key_${userId}`);
+    }
+
+    if (!isFirebaseConfigured) return;
+
+    try {
+      const docRef = doc(db, 'users', userId);
+      await setDoc(docRef, {
+        geminiApiKey: key
+      }, { merge: true });
+    } catch (error) {
+      console.error('Error updating Gemini API key:', error);
+    }
+  };
+
   return (
     <UserProgressContext.Provider
       value={{
@@ -279,6 +314,8 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         loginDemo,
         flashcardProgress,
         saveFlashcardProgress,
+        geminiApiKey,
+        updateGeminiApiKey,
       }}
     >
       {children}

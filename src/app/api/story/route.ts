@@ -3,9 +3,6 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { db } from '@/lib/firebase-admin';
 import { segmentChinese } from '@/lib/segmenter-server';
 
-// Initialize the Gemini client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 export async function POST(request: Request) {
   try {
     const { userId, targetHskLevel, storyLength } = await request.json();
@@ -19,6 +16,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid targetHskLevel' }, { status: 400 });
     }
 
+    // 1. Fetch user API Key & verify early
+    const userDocRef = db.collection('users').doc(userId);
+    const userDoc = await userDocRef.get();
+    const userData = userDoc.exists ? userDoc.data() : null;
+    
+    let geminiApiKey = userData?.geminiApiKey;
+
+    // Developer fallback for local testing
+    if (!geminiApiKey && process.env.NODE_ENV === 'development') {
+      geminiApiKey = process.env.GEMINI_API_KEY;
+    }
+
+    if (!geminiApiKey) {
+      return NextResponse.json({ 
+        error: 'Missing Gemini API Key. Please configure your API key to generate custom stories.',
+        code: 'MISSING_API_KEY'
+      }, { status: 400 });
+    }
+
     const displayHskLevel = hskLevelParsed === 7 ? '7-9' : String(hskLevelParsed);
 
     // Calculate requested story length constraints based on selected ranges
@@ -30,11 +46,11 @@ export async function POST(request: Request) {
       lengthRange = '250-400';
     }
 
-    // 1. Retrieve the user's previously read story IDs
+    // 2. Retrieve the user's previously read story IDs
     const readStoriesSnap = await db.collection('users').doc(userId).collection('readStories').get();
     const readStoryIds = new Set(readStoriesSnap.docs.map(doc => doc.id));
 
-    // 2. Query the global shared stories collection for stories matching the target HSK level
+    // 3. Query the global shared stories collection for stories matching the target HSK level
     const cachedStoriesSnap = await db.collection('stories')
       .where('targetLevel', '==', hskLevelParsed)
       .get();
@@ -50,7 +66,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Cache Hit: Instantly segment text and serve the cached story
+    // 4. Cache Hit: Instantly segment text and serve the cached story
     if (foundCachedStory) {
       const textToSegment = foundCachedStory.text || '';
       const segmentedTokens = segmentChinese(textToSegment);
@@ -71,10 +87,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // 4. Cache Miss: Pull knownWords and trigger Gemini generation pipeline
-    const userDocRef = db.collection('users').doc(userId);
-    const userDoc = await userDocRef.get();
-    const knownWords: string[] = userDoc.exists ? (userDoc.data()?.knownWords || []) : [];
+    // 5. Cache Miss: Pull knownWords and trigger Gemini generation pipeline
+    const knownWords: string[] = userData?.knownWords || [];
 
     // System instruction calibrated with known-word boundaries and quizzes
     const systemInstruction = `
@@ -116,46 +130,63 @@ export async function POST(request: Request) {
 
     const userPrompt = 'Please write a new story following the instructions.';
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: userPrompt,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            storyText: { type: Type.STRING, description: 'The story written in Simplified Chinese' },
-            translation: { type: Type.STRING, description: 'Natural English translation of the story' },
-            newWordsIntroduced: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: 'The 3-6 new HSK vocabulary words introduced in the story'
-            },
-            comprehensionQuestions: {
-              type: Type.ARRAY,
-              description: 'Exactly 3 multiple-choice comprehension questions about the story',
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  question: { type: Type.STRING, description: 'The question in Simplified Chinese' },
-                  options: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: 'Exactly 4 option choices'
+    // Initialize the Gemini client per-user inside the generation block
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: userPrompt,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              storyText: { type: Type.STRING, description: 'The story written in Simplified Chinese' },
+              translation: { type: Type.STRING, description: 'Natural English translation of the story' },
+              newWordsIntroduced: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: 'The 3-6 new HSK vocabulary words introduced in the story'
+              },
+              comprehensionQuestions: {
+                type: Type.ARRAY,
+                description: 'Exactly 3 multiple-choice comprehension questions about the story',
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    question: { type: Type.STRING, description: 'The question in Simplified Chinese' },
+                    options: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: 'Exactly 4 option choices'
+                    },
+                    answerIndex: { type: Type.INTEGER, description: '0-based index of the correct option' },
+                    explanation: { type: Type.STRING, description: 'English explanation of the correct answer' }
                   },
-                  answerIndex: { type: Type.INTEGER, description: '0-based index of the correct option' },
-                  explanation: { type: Type.STRING, description: 'English explanation of the correct answer' }
-                },
-                required: ['question', 'options', 'answerIndex', 'explanation']
+                  required: ['question', 'options', 'answerIndex', 'explanation']
+                }
               }
-            }
-          },
-          required: ['title', 'storyText', 'translation', 'newWordsIntroduced', 'comprehensionQuestions']
+            },
+            required: ['title', 'storyText', 'translation', 'newWordsIntroduced', 'comprehensionQuestions']
+          }
         }
+      });
+    } catch (apiError: any) {
+      console.error('Gemini API call failed:', apiError);
+      const msg = apiError.message || '';
+      const isAuthError = apiError.status === 400 || apiError.status === 403 || msg.toLowerCase().includes('api key') || msg.toLowerCase().includes('apikey') || msg.toLowerCase().includes('auth');
+      if (isAuthError) {
+        return NextResponse.json({
+          error: 'Your Gemini API Key is invalid or expired. Please verify and try again.',
+          code: 'INVALID_API_KEY'
+        }, { status: 401 });
       }
-    });
+      return NextResponse.json({ error: apiError.message || 'Error occurred during story generation.' }, { status: 500 });
+    }
 
     const outputText = response.text;
     if (!outputText) {
@@ -194,7 +225,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    console.error('Error generating story:', error);
+    console.error('Error in /api/story:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

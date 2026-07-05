@@ -89,7 +89,7 @@ export function HistorySidebar({
               
               {openLevels[lvl] !== false && (
                 <div className="space-y-2">
-                  {groupedHistory[lvl].map((histStory) => {
+                  {groupedHistory[lvl].map((histStory: { storyId: React.Key | null | undefined; title: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; tokens: string | any[]; }) => {
                     const isActive = storyId === histStory.storyId;
                     return (
                       <button

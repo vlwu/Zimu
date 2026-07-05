@@ -12,6 +12,7 @@ interface ReaderHeaderProps {
   setViewMode: (mode: 'stories' | 'flashcards') => void;
   storyLength: 'short' | 'medium' | 'long';
   setStoryLength: (len: 'short' | 'medium' | 'long') => void;
+  setShowApiKeyModal?: (val: boolean) => void;
 }
 
 export function ReaderHeader({
@@ -26,6 +27,7 @@ export function ReaderHeader({
   setViewMode,
   storyLength,
   setStoryLength,
+  setShowApiKeyModal,
 }: ReaderHeaderProps) {
   return (
     <header className="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-neutral-800">
@@ -92,6 +94,17 @@ export function ReaderHeader({
                 <span>New Story</span>
               </>
             )}
+          </button>
+
+          {/* Gemini API Key Settings Panel Toggle */}
+          <button
+            onClick={() => setShowApiKeyModal?.(true)}
+            className="p-2 text-slate-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+            title="Gemini API Key Settings"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+            </svg>
           </button>
 
           <button

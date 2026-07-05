@@ -16,6 +16,8 @@ export function useHomeReader() {
     saveFlashcardProgress,
     loading: userProgressLoading,
     logout,
+    geminiApiKey,
+    updateGeminiApiKey,
   } = useUserProgress();
 
   const [showPinyin, setShowPinyin] = useState(true);
@@ -54,12 +56,23 @@ export function useHomeReader() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [isStoryCompleted, setIsStoryCompleted] = useState(false);
 
+  // Gemini Onboarding & API Key Modal States
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKeySetupSkipped, setApiKeySetupSkipped] = useState(false);
+
   // Client-side route guard: redirect if loading is finished and no user exists
   useEffect(() => {
     if (!userProgressLoading && !userId) {
       router.push('/login');
     }
   }, [userId, userProgressLoading, router]);
+
+  // Intercept new entries & trigger onboarding if API key is missing
+  useEffect(() => {
+    if (userId && geminiApiKey === null && !apiKeySetupSkipped && viewMode === 'stories') {
+      setShowApiKeyModal(true);
+    }
+  }, [userId, geminiApiKey, apiKeySetupSkipped, viewMode]);
 
   // Load reading history from localStorage scoped to user ID on mount
   useEffect(() => {
@@ -89,6 +102,12 @@ export function useHomeReader() {
 
   const fetchNewStory = async () => {
     if (!userId) return;
+
+    // Block client request early and show dialog if no API key is available
+    if (!geminiApiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
 
     const displayLevelText = targetHskLevel === 7 ? '7-9' : String(targetHskLevel);
     const proceed = window.confirm(`Generating this story at HSK ${displayLevelText} — proceed?`);
@@ -123,7 +142,12 @@ export function useHomeReader() {
         });
         setCurrentStoryIndex(0);
       } else {
-        alert(data.error || 'Failed to generate story.');
+        if (data.code === 'INVALID_API_KEY' || data.code === 'MISSING_API_KEY') {
+          alert(data.error);
+          setShowApiKeyModal(true);
+        } else {
+          alert(data.error || 'Failed to generate story.');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -272,6 +296,8 @@ export function useHomeReader() {
     updateTargetHskLevel,
     flashcardProgress,
     saveFlashcardProgress,
+    geminiApiKey,
+    updateGeminiApiKey,
 
     showPinyin,
     setShowPinyin,
@@ -316,6 +342,11 @@ export function useHomeReader() {
     setQuizSubmitted,
     isStoryCompleted,
     setIsStoryCompleted,
+
+    showApiKeyModal,
+    setShowApiKeyModal,
+    apiKeySetupSkipped,
+    setApiKeySetupSkipped,
 
     fetchNewStory,
     startFlashcardSession,
