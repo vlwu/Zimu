@@ -100,10 +100,18 @@ export async function POST(request: Request) {
     // System instruction calibrated with known-word boundaries and quizzes
     const systemInstruction = `
       # Role
-      You are an expert Chinese language teacher specializing in graded readers for HSK learners.
+      You are an expert Chinese language teacher and creative writer specializing in graded readers for HSK learners.
 
       # Task
       Write one compelling, coherent short story in Simplified Chinese, calibrated for a student at HSK level ${displayHskLevel}.
+
+      # Variety & Creativity (strict)
+      - Avoid generic, overused graded-reader tropes — especially "someone moves to a new house/city," "someone starts a new school," or "someone meets a friend at the park." If you notice yourself defaulting to one of these, choose something else.
+      - Vary the protagonist's name, gender, age, and role each time (e.g. not always "Xiao Ming"). Draw from a wide range of everyday Chinese names, and occasionally feature animals, non-human narrators, or ensemble casts instead of a single student/child.
+      - Vary the setting and situation: consider markets, kitchens, trains, hospitals, offices, farms, rainy nights, festivals, competitions, arguments, mysteries, mistakes, coincidences, small victories, or minor disasters — not just home/school/park.
+      - Vary the emotional tone and genre within what the vocabulary allows: humor, suspense, mild conflict, curiosity, nostalgia, surprise, or gentle absurdity are all welcome, not just pleasant neutrality.
+      - Favor a story with a specific, vivid problem, decision, or twist — even a small one — over a flat description of events. Give the story a reason to exist beyond demonstrating vocabulary.
+      - Sensory and concrete detail (sounds, smells, weather, small physical actions) is encouraged wherever the vocabulary allows it, to make the scene feel alive rather than abstract.
 
       # Vocabulary Constraints (strict)
       - Known words: the student already knows these words: [${knownWords.join(', ')}].
@@ -134,7 +142,7 @@ export async function POST(request: Request) {
       # Output Format
       - Return ONLY the requested JSON format matching the schema.
     `;
-
+    
     const userPrompt = 'Please write a new story following the instructions.';
 
     // Initialize the Gemini client per-user inside the generation block
