@@ -18,6 +18,8 @@ export function useHomeReader() {
     logout,
     geminiApiKey,
     updateGeminiApiKey,
+    storyHistory,
+    setStoryHistory,
   } = useUserProgress();
 
   const [showPinyin, setShowPinyin] = useState(true);
@@ -45,8 +47,7 @@ export function useHomeReader() {
   const [sessionLimit, setSessionLimit] = useState<number>(15);
   const [sessionComplete, setSessionComplete] = useState<boolean>(false);
 
-  // Story History states
-  const [storyHistory, setStoryHistory] = useState<any[]>([]);
+  // Story History local state tracking
   const [currentStoryIndex, setCurrentStoryIndex] = useState<number>(-1);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
@@ -75,24 +76,13 @@ export function useHomeReader() {
     }
   }, [userId, geminiApiKey, apiKeySetupSkipped, viewMode]);
 
-  // Load reading history from localStorage scoped to user ID on mount
+  // Set active story when storyHistory becomes available
   useEffect(() => {
-    if (userId) {
-      const stored = localStorage.getItem(`zimu_history_${userId}`);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setStoryHistory(parsed);
-            setStory(parsed[0]);
-            setCurrentStoryIndex(0);
-          }
-        } catch (e) {
-          console.error('Failed to load story history:', e);
-        }
-      }
+    if (storyHistory && storyHistory.length > 0 && !story) {
+      setStory(storyHistory[0]);
+      setCurrentStoryIndex(0);
     }
-  }, [userId]);
+  }, [storyHistory, story]);
 
   // Sync reading history changes with localStorage
   useEffect(() => {

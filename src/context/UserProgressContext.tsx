@@ -1,9 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, updateDoc, arrayUnion, collection, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db, isFirebaseConfigured } from '@/lib/firebase-client';
+import { auth, isFirebaseConfigured } from '@/lib/firebase-client';
 
 interface UserProgressContextType {
   userId: string | null;
@@ -19,6 +18,8 @@ interface UserProgressContextType {
   saveFlashcardProgress: (word: string, interval: number, repetition: number, efactor: number, dueDate: string) => Promise<void>;
   geminiApiKey: string | null;
   updateGeminiApiKey: (key: string | null) => Promise<void>;
+  storyHistory: any[];
+  setStoryHistory: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
@@ -29,6 +30,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   const [targetHskLevel, setTargetHskLevel] = useState<number>(3);
   const [flashcardProgress, setFlashcardProgress] = useState<Record<string, { interval: number; repetition: number; efactor: number; dueDate: string }>>({});
   const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
+  const [storyHistory, setStoryHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Synchronize on Auth state changes if Firebase is configured
@@ -56,12 +58,24 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       setTargetHskLevel(3);
       setFlashcardProgress({});
       setGeminiApiKey(null);
+      setStoryHistory([]);
       setLoading(false);
       return;
     }
 
     async function fetchUserProgress() {
       setLoading(true);
+
+      // Try to load initial history from localStorage for instant rendering while fetching
+      if (userId) {
+        const storedLocalHistory = localStorage.getItem(`zimu_history_${userId}`);
+        if (storedLocalHistory) {
+          try {
+            setStoryHistory(JSON.parse(storedLocalHistory));
+          } catch (e) {}
+        }
+      }
+
       if (!isFirebaseConfigured) {
         console.warn('⚠️ Firebase Client credentials not configured. Falling back to in-memory local demo mode.');
         setKnownWords([]);
@@ -88,28 +102,15 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       }
 
       try {
-        const docRef = doc(db, 'users', userId!);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const res = await fetch(`/api/user-progress?userId=${userId}`);
+        if (res.ok) {
+          const data = await res.json();
           setKnownWords(data.knownWords || []);
           setTargetHskLevel(data.targetHskLevel || 3);
           setGeminiApiKey(data.geminiApiKey || null);
-        } else {
-          setKnownWords([]);
-          setTargetHskLevel(3);
-          setGeminiApiKey(null);
+          setFlashcardProgress(data.flashcardProgress || {});
+          setStoryHistory(data.storyHistory || []);
         }
-
-        // Fetch subcollection flashcards
-        const flashcardsSnap = await getDocs(collection(db, 'users', userId!, 'flashcards'));
-        const progressMap: Record<string, any> = {};
-        flashcardsSnap.forEach((doc) => {
-          progressMap[doc.id] = doc.data();
-        });
-        setFlashcardProgress(progressMap);
-
       } catch (error) {
         console.error('Error fetching user progress:', error);
       } finally {
@@ -134,12 +135,14 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      const docRef = doc(db, 'users', userId);
-      await setDoc(docRef, {
-        knownWords: arrayUnion(word),
-      }, { merge: true });
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'addKnownWord', word })
+      });
+      if (!res.ok) throw new Error('Failed to add known word');
     } catch (error) {
-      console.error('Error saving known word to Firestore:', error);
+      console.error('Error saving known word:', error);
       // Rollback optimistic update on failure
       setKnownWords((prev) => prev.filter((w) => w !== word));
     }
@@ -156,17 +159,14 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      const docRef = doc(db, 'users', userId);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const currentWords = docSnap.data().knownWords || [];
-        const updatedWords = currentWords.filter((w: string) => w !== word);
-        await updateDoc(docRef, {
-          knownWords: updatedWords,
-        });
-      }
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'removeKnownWord', word })
+      });
+      if (!res.ok) throw new Error('Failed to remove known word');
     } catch (error) {
-      console.error('Error removing known word from Firestore:', error);
+      console.error('Error removing known word:', error);
       // Rollback optimistic update on failure
       setKnownWords((prev) => {
         if (prev.includes(word)) return prev;
@@ -186,12 +186,14 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      const docRef = doc(db, 'users', userId);
-      await setDoc(docRef, {
-        targetHskLevel: level,
-      }, { merge: true });
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'updateLevel', level })
+      });
+      if (!res.ok) throw new Error('Failed to update target HSK level');
     } catch (error) {
-      console.error('Error saving target HSK level to Firestore:', error);
+      console.error('Error saving target HSK level:', error);
     }
   };
 
@@ -202,6 +204,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     setUserId(null);
     setFlashcardProgress({});
     setGeminiApiKey(null);
+    setStoryHistory([]);
   };
 
   const loginDemo = async (level: number = 3) => {
@@ -264,17 +267,22 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      const cardRef = doc(db, 'users', userId, 'flashcards', word);
-      await setDoc(cardRef, {
-        word,
-        interval,
-        repetition,
-        efactor,
-        dueDate,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          action: 'saveFlashcard',
+          word,
+          interval,
+          repetition,
+          efactor,
+          dueDate
+        })
+      });
+      if (!res.ok) throw new Error('Failed to save flashcard progress');
     } catch (error) {
-      console.error('Error saving flashcard progress to Firestore:', error);
+      console.error('Error saving flashcard progress:', error);
     }
   };
 
@@ -291,10 +299,12 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     if (!isFirebaseConfigured) return;
 
     try {
-      const docRef = doc(db, 'users', userId);
-      await setDoc(docRef, {
-        geminiApiKey: key
-      }, { merge: true });
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'updateApiKey', key })
+      });
+      if (!res.ok) throw new Error('Failed to update API key');
     } catch (error) {
       console.error('Error updating Gemini API key:', error);
     }
@@ -316,6 +326,8 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         saveFlashcardProgress,
         geminiApiKey,
         updateGeminiApiKey,
+        storyHistory,
+        setStoryHistory,
       }}
     >
       {children}
