@@ -6,6 +6,7 @@ import { HistorySidebar } from '@/components/HistorySidebar';
 import { ReaderHeader } from '@/components/ReaderHeader';
 import { StoryView } from '@/components/StoryView';
 import { FlashcardView } from '@/components/FlashcardView';
+import { SettingsView } from '@/components/SettingsView';
 import { WordPopup } from '@/components/WordPopup';
 import { ApiKeyModal } from '@/components/ApiKeyModal';
 import { QuickTipsModal } from '@/components/QuickTipsModal';
@@ -80,6 +81,8 @@ export default function HomeReaderPage() {
             startFlashcardSession={reader.startFlashcardSession}
             handleRateCard={reader.handleRateCard}
           />
+        ) : reader.viewMode === 'settings' ? (
+          <SettingsView />
         ) : (
           reader.story ? (
             <StoryView

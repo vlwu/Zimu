@@ -38,7 +38,7 @@ export function useHomeReader() {
     comprehensionQuestions?: ComprehensionQuestion[];
   } | null>(null);
 
-  const [viewMode, setViewMode] = useState<'stories' | 'flashcards'>('stories');
+  const [viewMode, setViewMode] = useState<'stories' | 'flashcards' | 'settings'>('stories');
 
   // Flashcards state
   const [flashcardsList, setFlashcardsList] = useState<any[]>([]);
@@ -70,12 +70,12 @@ export function useHomeReader() {
     }
   }, [userId, userProgressLoading, router]);
 
-  // Intercept new entries & trigger onboarding if API key is missing
+  // Intercept new entries & trigger onboarding if API key is missing (ensuring userProgressLoading is false first)
   useEffect(() => {
-    if (userId && geminiApiKey === null && !apiKeySetupSkipped && viewMode === 'stories') {
+    if (!userProgressLoading && userId && geminiApiKey === null && !apiKeySetupSkipped && viewMode === 'stories') {
       setShowApiKeyModal(true);
     }
-  }, [userId, geminiApiKey, apiKeySetupSkipped, viewMode]);
+  }, [userId, geminiApiKey, apiKeySetupSkipped, viewMode, userProgressLoading]);
 
   // Set active story when storyHistory becomes available
   useEffect(() => {

@@ -8,8 +8,8 @@ interface ReaderHeaderProps {
   fetchNewStory: () => void;
   loading: boolean;
   logout: () => void;
-  viewMode: 'stories' | 'flashcards';
-  setViewMode: (mode: 'stories' | 'flashcards') => void;
+  viewMode: 'stories' | 'flashcards' | 'settings';
+  setViewMode: (mode: 'stories' | 'flashcards' | 'settings') => void;
   storyLength: 'short' | 'medium' | 'long';
   setStoryLength: (len: 'short' | 'medium' | 'long') => void;
   setShowApiKeyModal?: (val: boolean) => void;
@@ -153,6 +153,16 @@ export function ReaderHeader({
           }`}
         >
           Flashcard Review
+        </button>
+        <button
+          onClick={() => setViewMode('settings')}
+          className={`flex-1 py-2 text-sm font-bold rounded-lg transition cursor-pointer ${
+            viewMode === 'settings'
+              ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          Settings
         </button>
       </div>
 
