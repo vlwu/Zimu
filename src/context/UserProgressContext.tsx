@@ -83,6 +83,29 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
             setStoryHistory(JSON.parse(storedLocalHistory));
           } catch (e) {}
         }
+
+        // Load other local stored values for instant rendering
+        const storedLevel = localStorage.getItem(`zimu_target_hsk_level_${userId}`);
+        if (storedLevel) {
+          setTargetHskLevel(Number(storedLevel));
+        }
+
+        const storedApiKey = localStorage.getItem(`zimu_gemini_api_key_${userId}`);
+        if (storedApiKey) {
+          setGeminiApiKey(storedApiKey);
+        }
+
+        const storedNickname = localStorage.getItem(`zimu_nickname_${userId}`);
+        if (storedNickname) {
+          setNickname(storedNickname);
+        }
+
+        const storedProgress = localStorage.getItem(`zimu_flashcard_progress_${userId}`);
+        if (storedProgress) {
+          try {
+            setFlashcardProgress(JSON.parse(storedProgress));
+          } catch (e) {}
+        }
       }
 
       if (!isFirebaseConfigured) {
@@ -114,7 +137,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       }
 
       try {
-        const res = await fetch(`/api/user-progress?userId=${userId}`);
+        const res = await fetch(`/api/user-progress?userId=${userId}`, {
+          cache: 'no-store'
+        });
         if (res.ok) {
           const data = await res.json();
           setKnownWords(data.knownWords || []);
@@ -123,6 +148,27 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           setNickname(data.nickname || null);
           setFlashcardProgress(data.flashcardProgress || {});
           setStoryHistory(data.storyHistory || []);
+
+          // Sync back to localStorage for next instant load
+          if (data.targetHskLevel) {
+            localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
+          }
+          if (data.geminiApiKey) {
+            localStorage.setItem(`zimu_gemini_api_key_${userId}`, data.geminiApiKey);
+          } else {
+            localStorage.removeItem(`zimu_gemini_api_key_${userId}`);
+          }
+          if (data.nickname) {
+            localStorage.setItem(`zimu_nickname_${userId}`, data.nickname);
+          } else {
+            localStorage.removeItem(`zimu_nickname_${userId}`);
+          }
+          if (data.flashcardProgress) {
+            localStorage.setItem(`zimu_flashcard_progress_${userId}`, JSON.stringify(data.flashcardProgress));
+          }
+          if (data.storyHistory) {
+            localStorage.setItem(`zimu_history_${userId}`, JSON.stringify(data.storyHistory));
+          }
         }
       } catch (error) {
         console.error('Error fetching user progress:', error);
@@ -193,6 +239,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
 
     // Optimistic UI update
     setTargetHskLevel(level);
+    localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(level));
 
     if (!isFirebaseConfigured) {
       return; // Skip Firestore write in unconfigured local demo mode
@@ -223,7 +270,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
 
   const loginDemo = async (level: number = 3) => {
     setUserId('test-user-id');
-    setTargetHskLevel(level < 7 ? level + 1 : 7);
+    const demoLevel = level < 7 ? level + 1 : 7;
+    setTargetHskLevel(demoLevel);
+    localStorage.setItem('zimu_target_hsk_level_test-user-id', String(demoLevel));
     
     // Load flashcard progress for demo user
     const storedProgress = localStorage.getItem('zimu_flashcard_progress_test-user-id');
@@ -309,6 +358,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         const { knownWords: sKnownWords, targetHskLevel: sLevel } = data.progressionResult;
         setKnownWords(sKnownWords);
         setTargetHskLevel(sLevel);
+        if (sLevel) {
+          localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(sLevel));
+        }
       }
     } catch (error) {
       console.error('Error saving flashcard progress:', error);
@@ -397,6 +449,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         if (data.knownWords) {
           setKnownWords(data.knownWords);
           setTargetHskLevel(data.targetHskLevel);
+          if (data.targetHskLevel) {
+            localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
+          }
         }
       } catch (e) {
         console.error('Error resetting demo known words:', e);
@@ -415,6 +470,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       if (data.success) {
         setKnownWords(data.knownWords);
         setTargetHskLevel(data.targetHskLevel);
+        if (data.targetHskLevel) {
+          localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
+        }
       }
     } catch (error) {
       console.error('Error resetting known words:', error);
@@ -440,6 +498,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     localStorage.removeItem(`zimu_gemini_api_key_${userId}`);
     localStorage.removeItem(`zimu_nickname_${userId}`);
     localStorage.removeItem(`zimu_history_${userId}`);
+    localStorage.removeItem(`zimu_target_hsk_level_${userId}`);
 
     await logout();
   };
@@ -454,6 +513,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     setFlashcardProgress(bFlashcardProgress);
 
     localStorage.setItem(`zimu_flashcard_progress_${userId}`, JSON.stringify(bFlashcardProgress));
+    localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(bTargetHskLevel));
 
     if (!isFirebaseConfigured) return;
 
@@ -536,6 +596,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         const { knownWords: sKnownWords, targetHskLevel: sLevel } = data.progressionResult;
         setKnownWords(sKnownWords);
         setTargetHskLevel(sLevel);
+        if (sLevel) {
+          localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(sLevel));
+        }
       }
     } catch (error) {
       console.error('Error completing story:', error);
