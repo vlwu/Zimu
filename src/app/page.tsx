@@ -70,6 +70,8 @@ export default function HomeReaderPage() {
           setStoryLength={reader.setStoryLength}
           setShowApiKeyModal={reader.setShowApiKeyModal}
           setShowTipsModal={reader.setShowTipsModal}
+          nickname={reader.nickname}
+          setShowSettingsModal={reader.setShowSettingsModal}
         />
 
         {reader.viewMode === 'flashcards' ? (
