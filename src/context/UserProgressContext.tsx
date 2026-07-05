@@ -21,6 +21,12 @@ interface UserProgressContextType {
   storyHistory: any[];
   setStoryHistory: React.Dispatch<React.SetStateAction<any[]>>;
   completeStory: (storyId: string) => Promise<void>;
+  nickname: string | null;
+  updateNickname: (name: string | null) => Promise<void>;
+  resetFlashcards: () => Promise<void>;
+  resetKnownWords: (level: number) => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  importBackup: (backup: any) => Promise<void>;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
@@ -31,6 +37,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   const [targetHskLevel, setTargetHskLevel] = useState<number>(3);
   const [flashcardProgress, setFlashcardProgress] = useState<Record<string, { interval: number; repetition: number; efactor: number; dueDate: string }>>({});
   const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
+  const [nickname, setNickname] = useState<string | null>(null);
   const [storyHistory, setStoryHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -59,6 +66,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       setTargetHskLevel(3);
       setFlashcardProgress({});
       setGeminiApiKey(null);
+      setNickname(null);
       setStoryHistory([]);
       setLoading(false);
       return;
@@ -82,7 +90,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         setKnownWords([]);
         setTargetHskLevel(3);
         
-        // Load flashcard progress from localStorage for demo user
+        // Load local demo user values from localStorage
         const storedProgress = localStorage.getItem(`zimu_flashcard_progress_test-user-id`);
         if (storedProgress) {
           try {
@@ -97,6 +105,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
 
         const storedApiKey = localStorage.getItem('zimu_gemini_api_key_test-user-id');
         setGeminiApiKey(storedApiKey || null);
+
+        const storedNickname = localStorage.getItem('zimu_nickname_test-user-id');
+        setNickname(storedNickname || null);
         
         setLoading(false);
         return;
@@ -109,6 +120,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           setKnownWords(data.knownWords || []);
           setTargetHskLevel(data.targetHskLevel || 3);
           setGeminiApiKey(data.geminiApiKey || null);
+          setNickname(data.nickname || null);
           setFlashcardProgress(data.flashcardProgress || {});
           setStoryHistory(data.storyHistory || []);
         }
@@ -205,6 +217,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     setUserId(null);
     setFlashcardProgress({});
     setGeminiApiKey(null);
+    setNickname(null);
     setStoryHistory([]);
   };
 
@@ -226,6 +239,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
 
     const storedApiKey = localStorage.getItem('zimu_gemini_api_key_test-user-id');
     setGeminiApiKey(storedApiKey || null);
+
+    const storedNickname = localStorage.getItem('zimu_nickname_test-user-id');
+    setNickname(storedNickname || null);
 
     try {
       const res = await fetch('/api/init-user', {
@@ -323,6 +339,140 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const updateNickname = async (name: string | null) => {
+    if (!userId) return;
+
+    setNickname(name);
+    if (name) {
+      localStorage.setItem(`zimu_nickname_${userId}`, name);
+    } else {
+      localStorage.removeItem(`zimu_nickname_${userId}`);
+    }
+
+    if (!isFirebaseConfigured) return;
+
+    try {
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'updateNickname', nickname: name })
+      });
+      if (!res.ok) throw new Error('Failed to update nickname');
+    } catch (error) {
+      console.error('Error updating nickname:', error);
+    }
+  };
+
+  const resetFlashcards = async () => {
+    if (!userId) return;
+
+    setFlashcardProgress({});
+    localStorage.setItem(`zimu_flashcard_progress_${userId}`, JSON.stringify({}));
+
+    if (!isFirebaseConfigured) return;
+
+    try {
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'resetFlashcards' })
+      });
+      if (!res.ok) throw new Error('Failed to reset flashcard progress');
+    } catch (error) {
+      console.error('Error resetting flashcards:', error);
+    }
+  };
+
+  const resetKnownWords = async (level: number) => {
+    if (!userId) return;
+
+    if (!isFirebaseConfigured) {
+      try {
+        const res = await fetch('/api/init-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, level, isDemo: true })
+        });
+        const data = await res.json();
+        if (data.knownWords) {
+          setKnownWords(data.knownWords);
+          setTargetHskLevel(data.targetHskLevel);
+        }
+      } catch (e) {
+        console.error('Error resetting demo known words:', e);
+      }
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'resetKnownWords', level })
+      });
+      if (!res.ok) throw new Error('Failed to reset known words');
+      const data = await res.json();
+      if (data.success) {
+        setKnownWords(data.knownWords);
+        setTargetHskLevel(data.targetHskLevel);
+      }
+    } catch (error) {
+      console.error('Error resetting known words:', error);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!userId) return;
+
+    if (isFirebaseConfigured) {
+      try {
+        await fetch('/api/user-progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, action: 'deleteAccount' })
+        });
+      } catch (error) {
+        console.error('Error executing backend account deletion:', error);
+      }
+    }
+
+    localStorage.removeItem(`zimu_flashcard_progress_${userId}`);
+    localStorage.removeItem(`zimu_gemini_api_key_${userId}`);
+    localStorage.removeItem(`zimu_nickname_${userId}`);
+    localStorage.removeItem(`zimu_history_${userId}`);
+
+    await logout();
+  };
+
+  const importBackup = async (backup: any) => {
+    if (!userId) return;
+
+    const { knownWords: bKnownWords = [], targetHskLevel: bTargetHskLevel = 3, flashcardProgress: bFlashcardProgress = {} } = backup;
+
+    setKnownWords(bKnownWords);
+    setTargetHskLevel(bTargetHskLevel);
+    setFlashcardProgress(bFlashcardProgress);
+
+    localStorage.setItem(`zimu_flashcard_progress_${userId}`, JSON.stringify(bFlashcardProgress));
+
+    if (!isFirebaseConfigured) return;
+
+    try {
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          action: 'importBackup',
+          backupData: backup
+        })
+      });
+      if (!res.ok) throw new Error('Failed to import backup');
+    } catch (error) {
+      console.error('Error importing backup:', error);
+    }
+  };
+
   const completeStory = async (storyId: string) => {
     if (!userId) return;
 
@@ -417,6 +567,12 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         storyHistory,
         setStoryHistory,
         completeStory,
+        nickname,
+        updateNickname,
+        resetFlashcards,
+        resetKnownWords,
+        deleteAccount,
+        importBackup,
       }}
     >
       {children}

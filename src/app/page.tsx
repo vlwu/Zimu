@@ -11,6 +11,11 @@ import { WordPopup } from '@/components/WordPopup';
 import { ApiKeyModal } from '@/components/ApiKeyModal';
 import { QuickTipsModal } from '@/components/QuickTipsModal';
 
+const SettingsViewWithProps = SettingsView as React.ComponentType<{
+  showSettingsModal: boolean;
+  setShowSettingsModal: React.Dispatch<React.SetStateAction<boolean>>;
+}>;
+
 export default function HomeReaderPage() {
   const reader = useHomeReader();
 
@@ -59,8 +64,8 @@ export default function HomeReaderPage() {
           fetchNewStory={reader.fetchNewStory}
           loading={reader.loading}
           logout={reader.logout}
-          viewMode={reader.viewMode}
-          setViewMode={reader.setViewMode}
+          viewMode={reader.viewMode as any}
+          setViewMode={reader.setViewMode as any}
           storyLength={reader.storyLength}
           setStoryLength={reader.setStoryLength}
           setShowApiKeyModal={reader.setShowApiKeyModal}
@@ -81,8 +86,6 @@ export default function HomeReaderPage() {
             startFlashcardSession={reader.startFlashcardSession}
             handleRateCard={reader.handleRateCard}
           />
-        ) : reader.viewMode === 'settings' ? (
-          <SettingsView />
         ) : (
           reader.story ? (
             <StoryView
@@ -138,6 +141,12 @@ export default function HomeReaderPage() {
         geminiApiKey={reader.geminiApiKey}
         updateGeminiApiKey={reader.updateGeminiApiKey}
         setApiKeySetupSkipped={reader.setApiKeySetupSkipped}
+      />
+
+      {/* Settings Modal Component */}
+      <SettingsViewWithProps
+        showSettingsModal={reader.showSettingsModal}
+        setShowSettingsModal={reader.setShowSettingsModal}
       />
 
       {/* Quick Study Tips Modal */}

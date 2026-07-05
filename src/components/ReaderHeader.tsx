@@ -8,12 +8,14 @@ interface ReaderHeaderProps {
   fetchNewStory: () => void;
   loading: boolean;
   logout: () => void;
-  viewMode: 'stories' | 'flashcards' | 'settings';
-  setViewMode: (mode: 'stories' | 'flashcards' | 'settings') => void;
+  viewMode: 'stories' | 'flashcards';
+  setViewMode: (mode: 'stories' | 'flashcards') => void;
   storyLength: 'short' | 'medium' | 'long';
   setStoryLength: (len: 'short' | 'medium' | 'long') => void;
   setShowApiKeyModal?: (val: boolean) => void;
   setShowTipsModal?: (val: boolean) => void;
+  nickname?: string | null;
+  setShowSettingsModal?: (val: boolean) => void;
 }
 
 export function ReaderHeader({
@@ -23,13 +25,14 @@ export function ReaderHeader({
   updateTargetHskLevel,
   fetchNewStory,
   loading,
-  logout,
   viewMode,
   setViewMode,
   storyLength,
   setStoryLength,
   setShowApiKeyModal,
   setShowTipsModal,
+  nickname,
+  setShowSettingsModal,
 }: ReaderHeaderProps) {
   return (
     <header className="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-neutral-800">
@@ -44,9 +47,16 @@ export function ReaderHeader({
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
-          </h1>
+          <div className="flex flex-col">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
+              Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
+            </h1>
+            {nickname && (
+              <span className="text-[10px] text-slate-500 dark:text-neutral-400 font-bold -mt-0.5 tracking-wide animate-fadeIn">
+                Welcome back, {nickname}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -120,13 +130,15 @@ export function ReaderHeader({
             </svg>
           </button>
 
+          {/* Account Settings Modal Trigger replacing raw logout button */}
           <button
-            onClick={logout}
-            className="p-2 text-slate-500 hover:text-red-600 dark:text-neutral-400 dark:hover:text-red-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
-            title="Logout"
+            onClick={() => setShowSettingsModal?.(true)}
+            className="p-2 text-slate-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+            title="Account Settings"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
         </div>
@@ -153,16 +165,6 @@ export function ReaderHeader({
           }`}
         >
           Flashcard Review
-        </button>
-        <button
-          onClick={() => setViewMode('settings')}
-          className={`flex-1 py-2 text-sm font-bold rounded-lg transition cursor-pointer ${
-            viewMode === 'settings'
-              ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-white shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-          }`}
-        >
-          Settings
         </button>
       </div>
 

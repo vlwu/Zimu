@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
+import { db, adminAuth } from '@/lib/firebase-admin';
 import { segmentChinese } from '@/lib/segmenter-server';
 import fs from 'fs';
 import path from 'path';
@@ -139,12 +139,14 @@ export async function GET(request: Request) {
     let knownWords: string[] = [];
     let targetHskLevel = 3;
     let geminiApiKey: string | null = null;
+    let nickname: string | null = null;
 
     if (docSnap.exists) {
       const data = docSnap.data();
       knownWords = data?.knownWords || [];
       targetHskLevel = data?.targetHskLevel || 3;
       geminiApiKey = data?.geminiApiKey || null;
+      nickname = data?.nickname || null;
     }
 
     // Fetch flashcard progress
@@ -191,6 +193,7 @@ export async function GET(request: Request) {
       knownWords,
       targetHskLevel,
       geminiApiKey,
+      nickname,
       flashcardProgress,
       storyHistory,
     });
@@ -203,7 +206,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId, action, word, level, key, interval, repetition, efactor, dueDate, storyId } = await request.json();
+    const { userId, action, word, level, key, interval, repetition, efactor, dueDate, storyId, nickname, backupData } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
@@ -245,6 +248,74 @@ export async function POST(request: Request) {
       await docRef.set({ geminiApiKey: key || null }, { merge: true });
       return NextResponse.json({ success: true });
     } 
+    else if (action === 'updateNickname') {
+      await docRef.set({ nickname: nickname || null }, { merge: true });
+      return NextResponse.json({ success: true });
+    }
+    else if (action === 'resetFlashcards') {
+      await db.recursiveDelete(docRef.collection('flashcards'));
+      return NextResponse.json({ success: true });
+    }
+    else if (action === 'resetKnownWords') {
+      if (level === undefined) return NextResponse.json({ error: 'Missing level' }, { status: 400 });
+      const filePath = path.join(process.cwd(), 'data/dictionary.json');
+      let resetWords: string[] = [];
+      if (fs.existsSync(filePath)) {
+        const rawData = fs.readFileSync(filePath, 'utf8');
+        const dict = JSON.parse(rawData);
+        
+        for (const [w, entry] of Object.entries(dict)) {
+          const hsk = (entry as any).h;
+          if (hsk && hsk <= level) {
+            resetWords.push(w);
+          }
+        }
+      }
+      const targetHskLevel = level < 7 ? level + 1 : 7;
+      await docRef.set({ knownWords: resetWords, targetHskLevel }, { merge: true });
+      return NextResponse.json({ success: true, count: resetWords.length, knownWords: resetWords, targetHskLevel });
+    }
+    else if (action === 'deleteAccount') {
+      try {
+        await adminAuth.deleteUser(userId);
+      } catch (authErr: any) {
+        console.warn('Auth user deletion skipped or failed:', authErr.message);
+      }
+      await db.recursiveDelete(docRef);
+      return NextResponse.json({ success: true });
+    }
+    else if (action === 'importBackup') {
+      if (!backupData) {
+        return NextResponse.json({ error: 'Missing backupData' }, { status: 400 });
+      }
+      const { knownWords: bKnownWords = [], targetHskLevel: bTargetHskLevel = 3, flashcardProgress: bFlashcardProgress = {} } = backupData;
+
+      // Update user base metrics
+      await docRef.set({
+        knownWords: bKnownWords,
+        targetHskLevel: bTargetHskLevel
+      }, { merge: true });
+
+      // Clean existing flashcards
+      await db.recursiveDelete(docRef.collection('flashcards'));
+
+      // Recreate all imported flashcard records in a single batch
+      const batch = db.batch();
+      for (const [w, card] of Object.entries(bFlashcardProgress)) {
+        const cardRef = docRef.collection('flashcards').doc(w);
+        batch.set(cardRef, {
+          word: w,
+          interval: (card as any).interval || 1,
+          repetition: (card as any).repetition || 0,
+          efactor: (card as any).efactor || 2.5,
+          dueDate: (card as any).dueDate || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+      await batch.commit();
+
+      return NextResponse.json({ success: true });
+    }
     else if (action === 'saveFlashcard') {
       if (!word) return NextResponse.json({ error: 'Missing word' }, { status: 400 });
       const cardRef = docRef.collection('flashcards').doc(word);

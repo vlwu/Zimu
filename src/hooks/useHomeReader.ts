@@ -21,6 +21,12 @@ export function useHomeReader() {
     storyHistory,
     setStoryHistory,
     completeStory,
+    nickname,
+    updateNickname,
+    resetFlashcards,
+    resetKnownWords,
+    deleteAccount,
+    importBackup,
   } = useUserProgress();
 
   const [showPinyin, setShowPinyin] = useState(true);
@@ -38,7 +44,7 @@ export function useHomeReader() {
     comprehensionQuestions?: ComprehensionQuestion[];
   } | null>(null);
 
-  const [viewMode, setViewMode] = useState<'stories' | 'flashcards' | 'settings'>('stories');
+  const [viewMode, setViewMode] = useState<'stories' | 'flashcards'>('stories');
 
   // Flashcards state
   const [flashcardsList, setFlashcardsList] = useState<any[]>([]);
@@ -58,8 +64,9 @@ export function useHomeReader() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [isStoryCompleted, setIsStoryCompleted] = useState(false);
 
-  // Gemini Onboarding & API Key Modal States
+  // Gemini Onboarding, API Key, and Settings Modal States
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [apiKeySetupSkipped, setApiKeySetupSkipped] = useState(false);
   const [showTipsModal, setShowTipsModal] = useState(false);
 
@@ -300,6 +307,12 @@ export function useHomeReader() {
     geminiApiKey,
     updateGeminiApiKey,
     completeStory,
+    nickname,
+    updateNickname,
+    resetFlashcards,
+    resetKnownWords,
+    deleteAccount,
+    importBackup,
 
     showPinyin,
     setShowPinyin,
@@ -347,6 +360,8 @@ export function useHomeReader() {
 
     showApiKeyModal,
     setShowApiKeyModal,
+    showSettingsModal,
+    setShowSettingsModal,
     apiKeySetupSkipped,
     setApiKeySetupSkipped,
     showTipsModal,
