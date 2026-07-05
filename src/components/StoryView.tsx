@@ -24,6 +24,7 @@ interface StoryViewProps {
   setQuizSubmitted: (val: boolean) => void;
   isStoryCompleted: boolean;
   setIsStoryCompleted: (val: boolean) => void;
+  onCompleteStory?: (storyId: string) => void;
 }
 
 const getHskBadgeColors = (level: number) => {
@@ -50,7 +51,6 @@ const getHskBadgeColors = (level: number) => {
 const getHskColorClass = (hsk: number | null | undefined, isKnown: boolean) => {
   if (!hsk) return 'hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-800 dark:text-slate-200';
   
-  // Style marked words to fade into standard reading states
   const opacityStyle = isKnown ? 'opacity-50 hover:opacity-100 transition duration-150 border-dotted' : 'border-b-2 font-bold';
 
   switch (hsk) {
@@ -66,7 +66,7 @@ const getHskColorClass = (hsk: number | null | undefined, isKnown: boolean) => {
       return `${opacityStyle} bg-rose-50/50 dark:bg-rose-950/10 text-rose-800/90 dark:text-rose-300/90 border-rose-300 dark:border-rose-800 hover:bg-rose-100/70 dark:hover:bg-rose-900/30`;
     case 6:
       return `${opacityStyle} bg-violet-50/50 dark:bg-violet-950/10 text-violet-800/90 dark:text-violet-300/90 border-violet-300 dark:border-violet-800 hover:bg-violet-100/70 dark:hover:bg-violet-900/30`;
-    default: // HSK 7-9 (represented by targetHskLevel 7)
+    default:
       return `${opacityStyle} bg-fuchsia-50/50 dark:bg-fuchsia-950/10 text-fuchsia-800/90 dark:text-fuchsia-300/90 border-fuchsia-300 dark:border-fuchsia-800 hover:bg-fuchsia-100/70 dark:hover:bg-fuchsia-900/30`;
   }
 };
@@ -86,6 +86,7 @@ export function StoryView({
   setQuizSubmitted,
   isStoryCompleted,
   setIsStoryCompleted,
+  onCompleteStory,
 }: StoryViewProps) {
   return (
     <main className="space-y-6">
@@ -203,7 +204,7 @@ export function StoryView({
               </span>
             </h3>
             {isStoryCompleted && (
-              <span className="text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
+              <span className="text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1 animate-fadeIn">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
@@ -262,7 +263,7 @@ export function StoryView({
                   </div>
 
                   {quizSubmitted && (
-                    <div className="mt-2 p-4 bg-blue-50/50 dark:bg-blue-950/15 border-l-4 border-blue-500 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 leading-relaxed rounded-r-xl">
+                    <div className="mt-2 p-4 bg-blue-50/50 dark:bg-blue-950/15 border-l-4 border-blue-500 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 leading-relaxed rounded-r-xl animate-fadeIn">
                       <span className="font-bold text-blue-800 dark:text-blue-300">Explanation:</span> {q.explanation}
                     </div>
                   )}
@@ -279,8 +280,13 @@ export function StoryView({
                     alert('Please complete all questions before submitting.');
                     return;
                   }
+                  
+                  const allCorrect = story.comprehensionQuestions?.every((q, qIndex) => quizAnswers[qIndex] === q.answerIndex);
                   setQuizSubmitted(true);
-                  setIsStoryCompleted(true);
+                  if (allCorrect) {
+                    setIsStoryCompleted(true);
+                    onCompleteStory?.(story.storyId);
+                  }
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl transition duration-150 text-sm shadow-md shadow-blue-500/15 cursor-pointer flex items-center justify-center gap-1.5"
               >
@@ -290,12 +296,32 @@ export function StoryView({
                 <span>Submit Answers & Finish Story</span>
               </button>
             ) : (
-              <div className="w-full text-center py-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5">
-                <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Excellent! Challenge finished. Click &quot;New Story&quot; above to keep learning.</span>
-              </div>
+              story.comprehensionQuestions?.every((q, qIndex) => quizAnswers[qIndex] === q.answerIndex) ? (
+                <div className="w-full text-center py-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5 animate-fadeIn">
+                  <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Excellent! Challenge finished. Click &quot;New Story&quot; above to keep learning.</span>
+                </div>
+              ) : (
+                <div className="space-y-3 animate-fadeIn">
+                  <div className="w-full text-center py-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 rounded-xl font-bold text-sm">
+                    Some answers were incorrect. Review the explanations below and try again!
+                  </div>
+                  <button
+                    onClick={() => {
+                      setQuizSubmitted(false);
+                      setIsStoryCompleted(false);
+                    }}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl transition duration-150 text-sm shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                    <span>Retry Quiz</span>
+                  </button>
+                </div>
+              )
             )}
           </div>
         </section>

@@ -1,9 +1,127 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { segmentChinese } from '@/lib/segmenter-server';
+import fs from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
+
+// Easy-to-tune configuration parameters for adaptive learning and auto-progression
+const AUTO_PROGRESS_CONFIG = {
+  // Number of times a word must be correctly recalled/encountered to graduate to "knownWords"
+  WORD_MASTERY_THRESHOLD: 3,
+  
+  // Percentage of vocabulary known at the current HSK level to trigger automatic progression (80%)
+  LEVEL_ADVANCEMENT_VOCAB_RATIO: 0.80,
+  
+  // Number of stories completed at the current level to trigger level advancement (3 stories)
+  LEVEL_ADVANCEMENT_STORY_COUNT: 3,
+};
+
+// Helper to load parsed dictionary.json on demand
+function loadDictionary() {
+  const filePath = path.join(process.cwd(), 'data/dictionary.json');
+  if (fs.existsSync(filePath)) {
+    const rawData = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(rawData);
+  }
+  return {};
+}
+
+// Unified progression engine that assesses and updates both user known words and HSK levels
+async function evaluateUserProgression(userId: string) {
+  try {
+    const docRef = db.collection('users').doc(userId);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) return null;
+
+    const userData = docSnap.data();
+    let knownWords: string[] = userData?.knownWords || [];
+    let targetHskLevel = userData?.targetHskLevel || 3;
+    
+    let knownWordsChanged = false;
+    let levelUpgraded = false;
+
+    // 1. Fetch card statistics to check if any have graduated to the knownWords pool
+    const flashcardsSnap = await docRef.collection('flashcards').get();
+    const dictionary = loadDictionary();
+
+    for (const cardDoc of flashcardsSnap.docs) {
+      const cardData = cardDoc.data();
+      const word = cardDoc.id;
+      const repetition = cardData.repetition || 0;
+
+      // Add to knownWords if mastery threshold is crossed and not yet there
+      if (repetition >= AUTO_PROGRESS_CONFIG.WORD_MASTERY_THRESHOLD && !knownWords.includes(word)) {
+        if (dictionary[word]) {
+          knownWords.push(word);
+          knownWordsChanged = true;
+        }
+      }
+    }
+
+    // Save updated knownWords list if changes occurred
+    if (knownWordsChanged) {
+      await docRef.set({ knownWords }, { merge: true });
+    }
+
+    // 2. Assess HSK Level advancement conditions
+    const currentLearningLevel = targetHskLevel;
+
+    if (currentLearningLevel < 7) {
+      // Calculate total words in level
+      let totalWordsAtLevel = 0;
+      for (const [_, entry] of Object.entries(dictionary)) {
+        if ((entry as any).h === currentLearningLevel) {
+          totalWordsAtLevel++;
+        }
+      }
+
+      // Calculate user's known words in level
+      let knownWordsAtLevel = 0;
+      for (const word of knownWords) {
+        if (dictionary[word]?.h === currentLearningLevel) {
+          knownWordsAtLevel++;
+        }
+      }
+
+      // Count completed stories at current target level
+      let completedStoriesCount = 0;
+      const readStoriesSnap = await docRef.collection('readStories').get();
+      for (const storyDocRef of readStoriesSnap.docs) {
+        if (storyDocRef.data().completed) {
+          const storyDoc = await db.collection('stories').doc(storyDocRef.id).get();
+          if (storyDoc.exists && storyDoc.data()?.targetLevel === currentLearningLevel) {
+            completedStoriesCount++;
+          }
+        }
+      }
+
+      const vocabRatio = totalWordsAtLevel > 0 ? (knownWordsAtLevel / totalWordsAtLevel) : 0;
+
+      const qualifiesForLevelUp = 
+        vocabRatio >= AUTO_PROGRESS_CONFIG.LEVEL_ADVANCEMENT_VOCAB_RATIO ||
+        completedStoriesCount >= AUTO_PROGRESS_CONFIG.LEVEL_ADVANCEMENT_STORY_COUNT;
+
+      if (qualifiesForLevelUp) {
+        targetHskLevel = currentLearningLevel + 1;
+        await docRef.set({ targetHskLevel }, { merge: true });
+        levelUpgraded = true;
+      }
+    }
+
+    return {
+      knownWords,
+      targetHskLevel,
+      knownWordsChanged,
+      levelUpgraded,
+    };
+  } catch (err) {
+    console.error('Error in evaluateUserProgression:', err);
+    return null;
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -41,6 +159,7 @@ export async function GET(request: Request) {
     const readStoryItems = readStoriesSnap.docs.map(doc => ({
       storyId: doc.id,
       readAt: doc.data().readAt || '',
+      completed: doc.data().completed || false,
     }));
 
     // Sort readStoryItems by readAt descending
@@ -63,6 +182,7 @@ export async function GET(request: Request) {
           tokens: tokens,
           newWords: sData?.newWords || [],
           comprehensionQuestions: sData?.comprehensionQuestions || [],
+          completed: item.completed,
         });
       }
     }
@@ -83,7 +203,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId, action, word, level, key, interval, repetition, efactor, dueDate } = await request.json();
+    const { userId, action, word, level, key, interval, repetition, efactor, dueDate, storyId } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
@@ -103,6 +223,7 @@ export async function POST(request: Request) {
         knownWords.push(word);
         await docRef.set({ knownWords }, { merge: true });
       }
+      return NextResponse.json({ success: true });
     } 
     else if (action === 'removeKnownWord') {
       if (!word) return NextResponse.json({ error: 'Missing word' }, { status: 400 });
@@ -113,13 +234,16 @@ export async function POST(request: Request) {
         const updatedWords = knownWords.filter(w => w !== word);
         await docRef.set({ knownWords: updatedWords }, { merge: true });
       }
+      return NextResponse.json({ success: true });
     } 
     else if (action === 'updateLevel') {
       if (level === undefined) return NextResponse.json({ error: 'Missing level' }, { status: 400 });
       await docRef.set({ targetHskLevel: level }, { merge: true });
+      return NextResponse.json({ success: true });
     } 
     else if (action === 'updateApiKey') {
       await docRef.set({ geminiApiKey: key || null }, { merge: true });
+      return NextResponse.json({ success: true });
     } 
     else if (action === 'saveFlashcard') {
       if (!word) return NextResponse.json({ error: 'Missing word' }, { status: 400 });
@@ -132,12 +256,66 @@ export async function POST(request: Request) {
         dueDate,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
+
+      // Run automatic progression logic
+      const progressionResult = await evaluateUserProgression(userId);
+
+      return NextResponse.json({ success: true, progressionResult });
     } 
+    else if (action === 'completeStory') {
+      if (!storyId) return NextResponse.json({ error: 'Missing storyId' }, { status: 400 });
+      
+      const storyRef = docRef.collection('readStories').doc(storyId);
+      await storyRef.set({
+        completed: true,
+        completedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // Retrieve the completed story details to identify the newly introduced HSK words
+      const storyDoc = await db.collection('stories').doc(storyId).get();
+      if (storyDoc.exists) {
+        const storyData = storyDoc.data();
+        const newWords = storyData?.newWords || [];
+
+        // Increment correct encounter count for introduced words
+        for (const newWord of newWords) {
+          const cardRef = docRef.collection('flashcards').doc(newWord);
+          const cardSnap = await cardRef.get();
+          
+          let prevRep = 0;
+          let prevEfactor = 2.5;
+          let prevInterval = 1;
+
+          if (cardSnap.exists) {
+            const data = cardSnap.data();
+            prevRep = data?.repetition || 0;
+            prevEfactor = data?.efactor || 2.5;
+            prevInterval = data?.interval || 1;
+          }
+
+          const rep = prevRep + 1;
+          const intervalVal = Math.round(prevInterval * prevEfactor);
+          const nextDueDate = new Date(Date.now() + intervalVal * 24 * 60 * 60 * 1000).toISOString();
+
+          await cardRef.set({
+            word: newWord,
+            interval: intervalVal,
+            repetition: rep,
+            efactor: prevEfactor,
+            dueDate: nextDueDate,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      }
+
+      // Evaluate progression parameters
+      const progressionResult = await evaluateUserProgression(userId);
+
+      return NextResponse.json({ success: true, progressionResult });
+    }
     else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
-
-    return NextResponse.json({ success: true });
 
   } catch (error: any) {
     console.error('Error in POST /api/user-progress:', error);

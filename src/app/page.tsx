@@ -97,6 +97,7 @@ export default function HomeReaderPage() {
               setQuizSubmitted={reader.setQuizSubmitted}
               isStoryCompleted={reader.isStoryCompleted}
               setIsStoryCompleted={reader.setIsStoryCompleted}
+              onCompleteStory={reader.completeStory}
             />
           ) : (
             <div className="text-center py-20 px-6 border-2 border-dashed border-slate-200 dark:border-neutral-800 rounded-2xl bg-white dark:bg-neutral-900/50 shadow-inner">

@@ -20,6 +20,7 @@ export function useHomeReader() {
     updateGeminiApiKey,
     storyHistory,
     setStoryHistory,
+    completeStory,
   } = useUserProgress();
 
   const [showPinyin, setShowPinyin] = useState(true);
@@ -255,8 +256,17 @@ export function useHomeReader() {
     if (!selected) return;
 
     setQuizAnswers({});
-    setQuizSubmitted(false);
-    setIsStoryCompleted(false);
+    setQuizSubmitted(selected.completed ? true : false);
+    setIsStoryCompleted(selected.completed ? true : false);
+
+    // If already completed, pre-select the correct answers for review
+    if (selected.completed && selected.comprehensionQuestions) {
+      const correctAnswers: Record<number, number> = {};
+      selected.comprehensionQuestions.forEach((q: any, i: number) => {
+        correctAnswers[i] = q.answerIndex;
+      });
+      setQuizAnswers(correctAnswers);
+    }
 
     setStory(selected);
     setCurrentStoryIndex(index);
@@ -289,6 +299,7 @@ export function useHomeReader() {
     saveFlashcardProgress,
     geminiApiKey,
     updateGeminiApiKey,
+    completeStory,
 
     showPinyin,
     setShowPinyin,

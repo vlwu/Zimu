@@ -56,3 +56,25 @@ export function convertTonality(pinyinStr: string): string {
     return text;
   }).join(' ');
 }
+
+/**
+ * Normalizes pinyin by mapping accented characters to standard vowels,
+ * stripping numbers, and removing whitespace/non-alphanumeric symbols.
+ */
+export function normalizePinyin(str: string): string {
+  if (!str) return '';
+  let normalized = str.toLowerCase();
+  
+  normalized = normalized
+    .replace(/[āáǎà]/g, 'a')
+    .replace(/[ēéěè]/g, 'e')
+    .replace(/[īíǐì]/g, 'i')
+    .replace(/[ōóǒò]/g, 'o')
+    .replace(/[ūúǔù]/g, 'u')
+    .replace(/[üǖǘǚǜv]/g, 'v');
+  
+  normalized = normalized.replace(/[1-5]/g, '');
+  normalized = normalized.replace(/[^a-z0-9]/g, '');
+  
+  return normalized;
+}

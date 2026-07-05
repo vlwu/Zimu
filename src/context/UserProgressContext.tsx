@@ -20,6 +20,7 @@ interface UserProgressContextType {
   updateGeminiApiKey: (key: string | null) => Promise<void>;
   storyHistory: any[];
   setStoryHistory: React.Dispatch<React.SetStateAction<any[]>>;
+  completeStory: (storyId: string) => Promise<void>;
 }
 
 const UserProgressContext = createContext<UserProgressContextType | undefined>(undefined);
@@ -263,6 +264,10 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     });
 
     if (!isFirebaseConfigured) {
+      // Evaluate word graduation rules in demo mode
+      if (repetition >= 3 && !knownWords.includes(word)) {
+        setKnownWords(prev => [...prev, word]);
+      }
       return; // Skip Firestore write in unconfigured local demo mode
     }
 
@@ -281,6 +286,14 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         })
       });
       if (!res.ok) throw new Error('Failed to save flashcard progress');
+
+      // Update HSK level and known words lists on automatic updates
+      const data = await res.json();
+      if (data.progressionResult) {
+        const { knownWords: sKnownWords, targetHskLevel: sLevel } = data.progressionResult;
+        setKnownWords(sKnownWords);
+        setTargetHskLevel(sLevel);
+      }
     } catch (error) {
       console.error('Error saving flashcard progress:', error);
     }
@@ -310,6 +323,81 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const completeStory = async (storyId: string) => {
+    if (!userId) return;
+
+    // Optimistic UI update for completed state
+    setStoryHistory((prev) =>
+      prev.map((story) =>
+        story.storyId === storyId ? { ...story, completed: true } : story
+      )
+    );
+
+    if (!isFirebaseConfigured) {
+      // Synchronize in-memory changes to localStorage in demo mode
+      const storedLocalHistory = localStorage.getItem(`zimu_history_${userId}`);
+      if (storedLocalHistory) {
+        try {
+          const history = JSON.parse(storedLocalHistory);
+          const updated = history.map((s: any) => s.storyId === storyId ? { ...s, completed: true } : s);
+          localStorage.setItem(`zimu_history_${userId}`, JSON.stringify(updated));
+        } catch (e) {}
+      }
+
+      // Automatically evaluate vocabulary acquisition in demo mode
+      const completedStory = storyHistory.find(s => s.storyId === storyId);
+      if (completedStory) {
+        const newWords = completedStory.newWords || [];
+        const updatedProgress = { ...flashcardProgress };
+        let wordsGraduated: string[] = [];
+
+        for (const word of newWords) {
+          const prev = updatedProgress[word] || { interval: 1, repetition: 0, efactor: 2.5, dueDate: '' };
+          const rep = prev.repetition + 1;
+          const interval = Math.round(prev.interval * prev.efactor);
+          const dueDate = new Date(Date.now() + interval * 24 * 60 * 60 * 1000).toISOString();
+          updatedProgress[word] = { interval, repetition: rep, efactor: prev.efactor, dueDate };
+
+          if (rep >= 3 && !knownWords.includes(word)) {
+            wordsGraduated.push(word);
+          }
+        }
+
+        if (wordsGraduated.length > 0) {
+          setKnownWords(prev => [...prev, ...wordsGraduated]);
+        }
+        setFlashcardProgress(updatedProgress);
+        localStorage.setItem(`zimu_flashcard_progress_${userId}`, JSON.stringify(updatedProgress));
+      }
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/user-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'completeStory', storyId })
+      });
+      if (!res.ok) throw new Error('Failed to mark story as completed');
+
+      // Update lists with auto-progression results on response
+      const data = await res.json();
+      if (data.progressionResult) {
+        const { knownWords: sKnownWords, targetHskLevel: sLevel } = data.progressionResult;
+        setKnownWords(sKnownWords);
+        setTargetHskLevel(sLevel);
+      }
+    } catch (error) {
+      console.error('Error completing story:', error);
+      // Rollback optimistic update on failure
+      setStoryHistory((prev) =>
+        prev.map((story) =>
+          story.storyId === storyId ? { ...story, completed: false } : story
+        )
+      );
+    }
+  };
+
   return (
     <UserProgressContext.Provider
       value={{
@@ -328,6 +416,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         updateGeminiApiKey,
         storyHistory,
         setStoryHistory,
+        completeStory,
       }}
     >
       {children}
