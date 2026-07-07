@@ -106,12 +106,18 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
             setFlashcardProgress(JSON.parse(storedProgress));
           } catch (e) {}
         }
+
+        // Load knownWords from localStorage for instant rendering
+        const storedKnownWords = localStorage.getItem(`zimu_known_words_${userId}`);
+        if (storedKnownWords) {
+          try {
+            setKnownWords(JSON.parse(storedKnownWords));
+          } catch (e) {}
+        }
       }
 
       if (!isFirebaseConfigured) {
         console.warn('⚠️ Firebase Client credentials not configured. Falling back to in-memory local demo mode.');
-        setKnownWords([]);
-        setTargetHskLevel(3);
         
         // Load local demo user values from localStorage
         const storedProgress = localStorage.getItem(`zimu_flashcard_progress_test-user-id`);
@@ -126,6 +132,17 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           setFlashcardProgress({});
         }
 
+        const storedKnownWords = localStorage.getItem(`zimu_known_words_test-user-id`);
+        if (storedKnownWords) {
+          try {
+            setKnownWords(JSON.parse(storedKnownWords));
+          } catch (e) {
+            setKnownWords([]);
+          }
+        } else {
+          setKnownWords([]);
+        }
+
         const storedApiKey = localStorage.getItem('zimu_gemini_api_key_test-user-id');
         setGeminiApiKey(storedApiKey || null);
 
@@ -137,7 +154,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       }
 
       try {
-        const res = await fetch(`/api/user-progress?userId=${userId}`, {
+        const res = await fetch(`/api/user-progress?userId=${userId}&t=${Date.now()}`, {
           cache: 'no-store'
         });
         if (res.ok) {
@@ -150,6 +167,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           setStoryHistory(data.storyHistory || []);
 
           // Sync back to localStorage for next instant load
+          if (data.knownWords) {
+            localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(data.knownWords));
+          }
           if (data.targetHskLevel) {
             localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
           }
@@ -183,10 +203,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
   const addKnownWord = async (word: string) => {
     if (!userId) return;
 
+    let updatedList: string[] = [];
     // Optimistic UI update
     setKnownWords((prev) => {
       if (prev.includes(word)) return prev;
-      return [...prev, word];
+      updatedList = [...prev, word];
+      localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(updatedList));
+      return updatedList;
     });
 
     if (!isFirebaseConfigured) {
@@ -203,15 +226,24 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.error('Error saving known word:', error);
       // Rollback optimistic update on failure
-      setKnownWords((prev) => prev.filter((w) => w !== word));
+      setKnownWords((prev) => {
+        const reverted = prev.filter((w) => w !== word);
+        localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(reverted));
+        return reverted;
+      });
     }
   };
 
   const removeKnownWord = async (word: string) => {
     if (!userId) return;
 
+    let updatedList: string[] = [];
     // Optimistic UI update
-    setKnownWords((prev) => prev.filter((w) => w !== word));
+    setKnownWords((prev) => {
+      updatedList = prev.filter((w) => w !== word);
+      localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(updatedList));
+      return updatedList;
+    });
 
     if (!isFirebaseConfigured) {
       return; // Skip Firestore write in unconfigured local demo mode
@@ -229,7 +261,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       // Rollback optimistic update on failure
       setKnownWords((prev) => {
         if (prev.includes(word)) return prev;
-        return [...prev, word];
+        const reverted = [...prev, word];
+        localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(reverted));
+        return reverted;
       });
     }
   };
@@ -301,6 +335,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       const data = await res.json();
       if (data.knownWords) {
         setKnownWords(data.knownWords);
+        localStorage.setItem('zimu_known_words_test-user-id', JSON.stringify(data.knownWords));
       }
     } catch (e) {
       console.error(e);
@@ -331,7 +366,11 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     if (!isFirebaseConfigured) {
       // Evaluate word graduation rules in demo mode
       if (repetition >= 3 && !knownWords.includes(word)) {
-        setKnownWords(prev => [...prev, word]);
+        setKnownWords(prev => {
+          const next = [...prev, word];
+          localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(next));
+          return next;
+        });
       }
       return; // Skip Firestore write in unconfigured local demo mode
     }
@@ -357,6 +396,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       if (data.progressionResult) {
         const { knownWords: sKnownWords, targetHskLevel: sLevel } = data.progressionResult;
         setKnownWords(sKnownWords);
+        localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(sKnownWords));
         setTargetHskLevel(sLevel);
         if (sLevel) {
           localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(sLevel));
@@ -448,6 +488,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         const data = await res.json();
         if (data.knownWords) {
           setKnownWords(data.knownWords);
+          localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(data.knownWords));
           setTargetHskLevel(data.targetHskLevel);
           if (data.targetHskLevel) {
             localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
@@ -469,6 +510,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       const data = await res.json();
       if (data.success) {
         setKnownWords(data.knownWords);
+        localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(data.knownWords));
         setTargetHskLevel(data.targetHskLevel);
         if (data.targetHskLevel) {
           localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
@@ -494,6 +536,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       }
     }
 
+    localStorage.removeItem(`zimu_known_words_${userId}`);
     localStorage.removeItem(`zimu_flashcard_progress_${userId}`);
     localStorage.removeItem(`zimu_gemini_api_key_${userId}`);
     localStorage.removeItem(`zimu_nickname_${userId}`);
@@ -509,6 +552,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
     const { knownWords: bKnownWords = [], targetHskLevel: bTargetHskLevel = 3, flashcardProgress: bFlashcardProgress = {} } = backup;
 
     setKnownWords(bKnownWords);
+    localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(bKnownWords));
     setTargetHskLevel(bTargetHskLevel);
     setFlashcardProgress(bFlashcardProgress);
 
@@ -574,7 +618,11 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         }
 
         if (wordsGraduated.length > 0) {
-          setKnownWords(prev => [...prev, ...wordsGraduated]);
+          setKnownWords(prev => {
+            const next = [...prev, ...wordsGraduated];
+            localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(next));
+            return next;
+          });
         }
         setFlashcardProgress(updatedProgress);
         localStorage.setItem(`zimu_flashcard_progress_${userId}`, JSON.stringify(updatedProgress));
@@ -595,6 +643,7 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
       if (data.progressionResult) {
         const { knownWords: sKnownWords, targetHskLevel: sLevel } = data.progressionResult;
         setKnownWords(sKnownWords);
+        localStorage.setItem(`zimu_known_words_${userId}`, JSON.stringify(sKnownWords));
         setTargetHskLevel(sLevel);
         if (sLevel) {
           localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(sLevel));
