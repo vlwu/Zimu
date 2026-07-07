@@ -272,7 +272,7 @@ export function LandingPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-3.47 5.105-5.105a2.236 2.236 0 10-3.162-3.162l-5.105 5.105-3.47.568 2.225-2.51 5.072-1.358h-.001z" />
                   </svg>
                   <p className="text-xs text-[#c3c6d7]/60 font-medium">
-                    Click on any characters above to preview the lookup helper!
+                    Hover or click on any highlighted word above to preview the lookup helper!
                   </p>
                 </div>
               )}
@@ -354,7 +354,7 @@ export function LandingPage() {
           <div className="bg-[#191b23] border border-white/5 rounded-2xl p-6 sm:p-8 hover:border-white/10 transition-colors">
             <div className="w-10 h-10 rounded-xl bg-[#2563eb]/10 flex items-center justify-center text-[#b4c5ff] mb-4">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
             </div>
             <h3 className="text-base font-bold text-white mb-2">SM-2 Spaced Repetition</h3>
@@ -379,11 +379,11 @@ export function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-8 border-t border-white/5 text-center flex flex-col sm:flex-row justify-between items-center gap-4">
-        <p className="text-xs text-[#c3c6d7]/50">&copy; {new Date().getFullYear()} Zimu 字幕. Read your way to fluency.</p>
+        <p className="text-xs text-[#c3c6d7]/50">Zimu 字幕 &middot; Read your way to fluency.</p>
         <div className="flex gap-4 text-xs text-[#c3c6d7]/50">
-          <a href="#" className="hover:text-[#b4c5ff] transition-colors">Privacy Policy</a>
+          <a href="/privacy" className="hover:text-[#b4c5ff] transition-colors">Privacy Policy</a>
           <span>&middot;</span>
-          <a href="#" className="hover:text-[#b4c5ff] transition-colors">Terms of Service</a>
+          <a href="/terms" className="hover:text-[#b4c5ff] transition-colors">Terms of Service</a>
         </div>
       </footer>
     </div>
