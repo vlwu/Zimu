@@ -157,11 +157,6 @@ export function LandingPage() {
       <main className="relative z-10 flex-1 max-w-7xl mx-auto w-full px-6 py-12 md:py-24 flex flex-col lg:flex-row gap-16 items-center">
         {/* Left column */}
         <div className="flex-1 space-y-8 max-w-2xl text-center lg:text-left">
-          <div className="inline-flex items-center gap-2 bg-[#191b23] border border-white/10 px-3 py-1.5 rounded-full text-xs text-[#b4c5ff] font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#2563eb] animate-pulse"></span>
-            Luminous Graded Reader
-          </div>
-          
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
             Learn Chinese <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#b4c5ff] to-[#ddb7ff]">

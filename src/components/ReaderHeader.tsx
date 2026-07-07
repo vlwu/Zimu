@@ -36,111 +36,117 @@ export function ReaderHeader({
 }: ReaderHeaderProps) {
   return (
     <header className="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-neutral-800">
-      <div className="flex justify-between items-center w-full gap-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-            className="md:hidden p-2 rounded-lg bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
-            title="Toggle History"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <div className="flex flex-col">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
-              Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
-            </h1>
-            {nickname && (
-              <span className="text-[10px] text-slate-500 dark:text-neutral-400 font-bold -mt-0.5 tracking-wide animate-fadeIn">
-                Welcome back, {nickname}
-              </span>
-            )}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center w-full gap-3 md:gap-4">
+        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+              className="md:hidden p-2 rounded-lg bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+              title="Toggle History"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="flex flex-col">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
+                Zimu <span className="text-slate-400 dark:text-neutral-500 font-normal">字幕</span>
+              </h1>
+              {nickname && (
+                <span className="text-[10px] text-slate-500 dark:text-neutral-400 font-bold -mt-0.5 tracking-wide animate-fadeIn">
+                  Welcome back, {nickname}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Level Selector Dropdown */}
-          <div className="relative group min-w-35">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 011.875 1.875v1.5a1.875 1.875 0 01-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875v-1.5c0-1.036.84-1.875 1.875-1.875z" />
-              </svg>
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+          <div className="flex items-center gap-2 flex-1 md:flex-initial min-w-0">
+            {/* Level Selector Dropdown */}
+            <div className="relative group flex-1 md:flex-initial min-w-[125px] md:min-w-35">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none">
+                <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 011.875 1.875v1.5a1.875 1.875 0 01-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875v-1.5c0-1.036.84-1.875 1.875-1.875z" />
+                </svg>
+              </div>
+              <select
+                id="hsk-select"
+                value={targetHskLevel}
+                onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
+                className="appearance-none w-full bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 hover:border-blue-400 dark:hover:border-blue-500 text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm rounded-xl pl-8 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer shadow-sm"
+              >
+                <option value={1}>HSK 1 (Beginner)</option>
+                <option value={2}>HSK 2 (Elementary)</option>
+                <option value={3}>HSK 3 (Intermediate)</option>
+                <option value={4}>HSK 4 (Upper Int.)</option>
+                <option value={5}>HSK 5 (Advanced)</option>
+                <option value={6}>HSK 6 (Proficient)</option>
+                <option value={7}>HSK 7-9 (Mastery)</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+                </svg>
+              </div>
             </div>
-            <select
-              id="hsk-select"
-              value={targetHskLevel}
-              onChange={(e) => updateTargetHskLevel(Number(e.target.value))}
-              className="appearance-none w-full bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 hover:border-blue-400 dark:hover:border-blue-500 text-slate-800 dark:text-slate-100 font-bold text-sm rounded-xl pl-9 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer shadow-sm"
+
+            <button
+              onClick={fetchNewStory}
+              disabled={loading}
+              className="flex-1 md:flex-initial px-3 md:px-4 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all font-semibold shadow-xs shadow-blue-500/20 cursor-pointer flex items-center justify-center gap-1.5 h-[36px] truncate"
             >
-              <option value={1}>HSK 1 (Beginner)</option>
-              <option value={2}>HSK 2 (Elementary)</option>
-              <option value={3}>HSK 3 (Intermediate)</option>
-              <option value={4}>HSK 4 (Upper Int.)</option>
-              <option value={5}>HSK 5 (Advanced)</option>
-              <option value={6}>HSK 6 (Proficient)</option>
-              <option value={7}>HSK 7-9 (Mastery)</option>
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <svg className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
-              </svg>
-            </div>
+              {loading ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  <span>New Story</span>
+                </>
+              )}
+            </button>
           </div>
 
-          <button
-            onClick={fetchNewStory}
-            disabled={loading}
-            className="px-4 py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all font-semibold shadow-xs shadow-blue-500/20 cursor-pointer flex items-center gap-1.5"
-          >
-            {loading ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>Generating...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                <span>New Story</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-1.5 md:gap-2 flex-none">
+            {/* Quick Study Tips Toggle Button */}
+            <button
+              onClick={() => setShowTipsModal?.(true)}
+              className="p-2 text-slate-500 hover:text-amber-500 dark:text-neutral-400 dark:hover:text-amber-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:text-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+              title="Quick Study Tips"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707-.707M12 5a7 7 0 00-7 7c0 2.902 1.86 5.37 4.433 6.273a.75.75 0 00.567-.04V20a1 1 0 001 1h2a1 1 0 001-1v-1.767a.75.75 0 00.567.04A7.001 7.001 0 0012 5z" />
+              </svg>
+            </button>
 
-          {/* Quick Study Tips Toggle Button */}
-          <button
-            onClick={() => setShowTipsModal?.(true)}
-            className="p-2 text-slate-500 hover:text-amber-500 dark:text-neutral-400 dark:hover:text-amber-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
-            title="Quick Study Tips"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707-.707M12 5a7 7 0 00-7 7c0 2.902 1.86 5.37 4.433 6.273a.75.75 0 00.567-.04V20a1 1 0 001 1h2a1 1 0 001-1v-1.767a.75.75 0 00.567.04A7.001 7.001 0 0012 5z" />
-            </svg>
-          </button>
+            {/* Gemini API Key Settings Panel Toggle */}
+            <button
+              onClick={() => setShowApiKeyModal?.(true)}
+              className="p-2 text-slate-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:text-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+              title="Gemini API Key Settings"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+              </svg>
+            </button>
 
-          {/* Gemini API Key Settings Panel Toggle */}
-          <button
-            onClick={() => setShowApiKeyModal?.(true)}
-            className="p-2 text-slate-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
-            title="Gemini API Key Settings"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
-            </svg>
-          </button>
-
-          {/* Account Settings Modal Trigger replacing raw logout button */}
-          <button
-            onClick={() => setShowSettingsModal?.(true)}
-            className="p-2 text-slate-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 rounded-lg transition duration-150 cursor-pointer"
-            title="Account Settings"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
+            {/* Account Settings Modal Trigger */}
+            <button
+              onClick={() => setShowSettingsModal?.(true)}
+              className="p-2 text-slate-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:text-neutral-700 rounded-lg transition duration-150 cursor-pointer"
+              title="Account Settings"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -170,14 +176,14 @@ export function ReaderHeader({
 
       {/* Target Story Length Slider / Selection Toolbar (Shown in Story mode) */}
       {viewMode === 'stories' && (
-        <div className="flex items-center justify-between bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-xl p-3 shadow-2xs w-full">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-xl p-3 shadow-2xs w-full gap-2 sm:gap-0">
           <span className="text-xs font-bold text-slate-500 dark:text-neutral-400 flex items-center gap-1">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
             <span>Estimated Story Length:</span>
           </span>
-          <div className="flex bg-slate-100 dark:bg-neutral-800 p-0.5 rounded-lg border border-slate-200/50 dark:border-neutral-700/50">
+          <div className="flex bg-slate-100 dark:bg-neutral-800 p-0.5 rounded-lg border border-slate-200/50 dark:border-neutral-700/50 w-full sm:w-auto justify-between sm:justify-start">
             <button
               onClick={() => setStoryLength('short')}
               className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
