@@ -70,13 +70,6 @@ export function useHomeReader() {
   const [apiKeySetupSkipped, setApiKeySetupSkipped] = useState(false);
   const [showTipsModal, setShowTipsModal] = useState(false);
 
-  // Client-side route guard: redirect if loading is finished and no user exists
-  useEffect(() => {
-    if (!userProgressLoading && !userId) {
-      router.push('/login');
-    }
-  }, [userId, userProgressLoading, router]);
-
   // Intercept new entries & trigger onboarding if API key is missing (ensuring userProgressLoading is false first)
   useEffect(() => {
     if (!userProgressLoading && userId && geminiApiKey === null && !apiKeySetupSkipped && viewMode === 'stories') {

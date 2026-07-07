@@ -10,6 +10,7 @@ import { SettingsView } from '@/components/SettingsView';
 import { WordPopup } from '@/components/WordPopup';
 import { ApiKeyModal } from '@/components/ApiKeyModal';
 import { QuickTipsModal } from '@/components/QuickTipsModal';
+import { LandingPage } from '@/components/LandingPage';
 
 const SettingsViewWithProps = SettingsView as React.ComponentType<{
   showSettingsModal: boolean;
@@ -19,7 +20,7 @@ const SettingsViewWithProps = SettingsView as React.ComponentType<{
 export default function HomeReaderPage() {
   const reader = useHomeReader();
 
-  if (reader.userProgressLoading || !reader.userId) {
+  if (reader.userProgressLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-neutral-950">
         <div className="text-center">
@@ -28,6 +29,11 @@ export default function HomeReaderPage() {
         </div>
       </div>
     );
+  }
+
+  // If the user is unauthenticated, render the newly designed LandingPage
+  if (!reader.userId) {
+    return <LandingPage />;
   }
 
   return (
