@@ -141,8 +141,9 @@ export function useHomeReader() {
           alert(data.error || 'Failed to generate story.');
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Network error or failure during story generation: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -180,8 +181,9 @@ export function useHomeReader() {
       } else {
         alert(data.error || 'Failed to assemble flashcards.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Failed to load flashcards: ${err.message || err}`);
     } finally {
       setFlashcardsLoading(false);
     }

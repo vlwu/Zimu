@@ -189,9 +189,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           if (data.storyHistory) {
             localStorage.setItem(`zimu_history_${userId}`, JSON.stringify(data.storyHistory));
           }
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${res.status} error from server`);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching user progress:', error);
+        alert(`Error synchronizing user profile: ${error.message || error}`);
       } finally {
         setLoading(false);
       }
@@ -222,9 +226,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'addKnownWord', word })
       });
-      if (!res.ok) throw new Error('Failed to add known word');
-    } catch (error) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+    } catch (error: any) {
       console.error('Error saving known word:', error);
+      alert(`Failed to save known word: ${error.message || error}`);
       // Rollback optimistic update on failure
       setKnownWords((prev) => {
         const reverted = prev.filter((w) => w !== word);
@@ -255,9 +263,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'removeKnownWord', word })
       });
-      if (!res.ok) throw new Error('Failed to remove known word');
-    } catch (error) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+    } catch (error: any) {
       console.error('Error removing known word:', error);
+      alert(`Failed to remove known word: ${error.message || error}`);
       // Rollback optimistic update on failure
       setKnownWords((prev) => {
         if (prev.includes(word)) return prev;
@@ -285,9 +297,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'updateLevel', level })
       });
-      if (!res.ok) throw new Error('Failed to update target HSK level');
-    } catch (error) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+    } catch (error: any) {
       console.error('Error saving target HSK level:', error);
+      alert(`Failed to save target level: ${error.message || error}`);
     }
   };
 
@@ -337,8 +353,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         setKnownWords(data.knownWords);
         localStorage.setItem('zimu_known_words_test-user-id', JSON.stringify(data.knownWords));
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(`Demo baseline generation failed: ${e.message || e}`);
     }
     setLoading(false);
   };
@@ -389,7 +406,10 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           dueDate
         })
       });
-      if (!res.ok) throw new Error('Failed to save flashcard progress');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
 
       // Update HSK level and known words lists on automatic updates
       const data = await res.json();
@@ -402,8 +422,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(sLevel));
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving flashcard progress:', error);
+      alert(`Failed to save flashcard progress: ${error.message || error}`);
     }
   };
 
@@ -425,9 +446,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'updateApiKey', key })
       });
-      if (!res.ok) throw new Error('Failed to update API key');
-    } catch (error) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+    } catch (error: any) {
       console.error('Error updating Gemini API key:', error);
+      alert(`Failed to save API key in profile: ${error.message || error}`);
     }
   };
 
@@ -449,9 +474,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'updateNickname', nickname: name })
       });
-      if (!res.ok) throw new Error('Failed to update nickname');
-    } catch (error) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+    } catch (error: any) {
       console.error('Error updating nickname:', error);
+      alert(`Failed to update display name: ${error.message || error}`);
     }
   };
 
@@ -469,9 +498,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'resetFlashcards' })
       });
-      if (!res.ok) throw new Error('Failed to reset flashcard progress');
-    } catch (error) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+    } catch (error: any) {
       console.error('Error resetting flashcards:', error);
+      alert(`Failed to clear flashcard metrics: ${error.message || error}`);
     }
   };
 
@@ -494,8 +527,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
             localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Error resetting demo known words:', e);
+        alert(`Demo vocabulary reset failed: ${e.message || e}`);
       }
       return;
     }
@@ -506,7 +540,10 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'resetKnownWords', level })
       });
-      if (!res.ok) throw new Error('Failed to reset known words');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setKnownWords(data.knownWords);
@@ -516,8 +553,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(data.targetHskLevel));
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error resetting known words:', error);
+      alert(`Failed to reset vocabulary pool: ${error.message || error}`);
     }
   };
 
@@ -531,8 +569,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, action: 'deleteAccount' })
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error executing backend account deletion:', error);
+        alert(`Warning: Server profile deletion skipped: ${error.message || error}`);
       }
     }
 
@@ -571,9 +610,13 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           backupData: backup
         })
       });
-      if (!res.ok) throw new Error('Failed to import backup');
-    } catch (error) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+    } catch (error: any) {
       console.error('Error importing backup:', error);
+      alert(`Progress restore synchronization failed: ${error.message || error}`);
     }
   };
 
@@ -636,7 +679,10 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'completeStory', storyId })
       });
-      if (!res.ok) throw new Error('Failed to mark story as completed');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
 
       // Update lists with auto-progression results on response
       const data = await res.json();
@@ -649,8 +695,9 @@ export function UserProgressProvider({ children }: { children: React.ReactNode }
           localStorage.setItem(`zimu_target_hsk_level_${userId}`, String(sLevel));
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error completing story:', error);
+      alert(`Failed to save completed story: ${error.message || error}`);
       // Rollback optimistic update on failure
       setStoryHistory((prev) =>
         prev.map((story) =>
