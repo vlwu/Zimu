@@ -19,8 +19,8 @@ let cachedApp: App | null = null;
 let cachedDb: Firestore | null = null;
 let cachedAuth: Auth | null = null;
 
-function getFirebaseAdmin(): { db: Firestore; adminAuth: Auth } {
-  if (cachedDb && cachedAuth) {
+function getFirebaseAdmin(): { db: Firestore | null; adminAuth: Auth | null } {
+  if (cachedDb !== null && cachedAuth !== null) {
     return { db: cachedDb, adminAuth: cachedAuth };
   }
 
@@ -56,29 +56,62 @@ function getFirebaseAdmin(): { db: Firestore; adminAuth: Auth } {
   } catch (err) {
     console.error("⚠️ Lazy Firebase Admin SDK initialization failed:", err);
     // Safe fallback to prevent Next.js import-time crashes
-    const fallbackApp = getApps().length === 0 
-      ? initializeApp({ projectId: firebaseAdminConfig.projectId || 'mock-project-id-placeholder' }) 
-      : getApp();
-    cachedDb = getFirestore(fallbackApp);
-    cachedAuth = getAuth(fallbackApp);
+    try {
+      const fallbackApp = getApps().length === 0 
+        ? initializeApp({ projectId: firebaseAdminConfig.projectId || 'mock-project-id-placeholder' }) 
+        : getApp();
+      cachedDb = getFirestore(fallbackApp);
+      cachedAuth = getAuth(fallbackApp);
+    } catch (fallbackErr) {
+      console.error("⚠️ Firebase Admin SDK fallback initialization also failed:", fallbackErr);
+      cachedDb = null;
+      cachedAuth = null;
+    }
   }
 
   return { db: cachedDb, adminAuth: cachedAuth };
 }
 
+const EXCLUDED_PROPERTIES = new Set([
+  '$$typeof',
+  '__esModule',
+  'default',
+  'then',
+  'toJSON',
+  'prototype',
+  'constructor',
+  'toString',
+  'valueOf'
+]);
+
 // Proxies to dynamically fetch the initialized services on demand
-// and preserve correct 'this' bindings for class-based Firestore/Auth methods.
+// and preserve correct 'this' bindings for class-based Firestore/Auth methods,
+// while shielding compiler/Webpack property lookups from triggering initialization crashes.
 export const db = new Proxy({} as Firestore, {
-  get(_, prop) {
+  get(target, prop) {
+    if (typeof prop === 'string' && EXCLUDED_PROPERTIES.has(prop)) {
+      return Reflect.get(target, prop);
+    }
     const services = getFirebaseAdmin();
+    if (!services || !services.db) {
+      console.warn(`⚠️ Warning: Firestore db proxy accessed but database is offline/uninitialized. Returning undefined for property: ${String(prop)}`);
+      return undefined;
+    }
     const value = Reflect.get(services.db, prop);
     return typeof value === 'function' ? value.bind(services.db) : value;
   }
 });
 
 export const adminAuth = new Proxy({} as Auth, {
-  get(_, prop) {
+  get(target, prop) {
+    if (typeof prop === 'string' && EXCLUDED_PROPERTIES.has(prop)) {
+      return Reflect.get(target, prop);
+    }
     const services = getFirebaseAdmin();
+    if (!services || !services.adminAuth) {
+      console.warn(`⚠️ Warning: Firebase adminAuth proxy accessed but auth is offline/uninitialized. Returning undefined for property: ${String(prop)}`);
+      return undefined;
+    }
     const value = Reflect.get(services.adminAuth, prop);
     return typeof value === 'function' ? value.bind(services.adminAuth) : value;
   }
