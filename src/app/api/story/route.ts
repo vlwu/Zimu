@@ -233,6 +233,14 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Error in /api/story:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: error.message || 'Internal Server Error',
+      stack: error.stack,
+      envCheck: {
+        hasProjectId: !!(process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
+        hasClientEmail: !!(process.env.FIREBASE_CLIENT_EMAIL || process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL),
+        hasPrivateKey: !!(process.env.FIREBASE_PRIVATE_KEY || process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY),
+      }
+    }, { status: 500 });
   }
 }

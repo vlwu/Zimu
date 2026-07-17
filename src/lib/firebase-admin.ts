@@ -27,14 +27,31 @@ const isConfigured = !!(
   firebaseAdminConfig.privateKey
 );
 
-// Initialize the Admin SDK ensuring we don't duplicate app instances during Next.js hot reloads
-// and gracefully fallback if keys are missing (such as during Next.js static build evaluation or dev mode)
-const app = getApps().length === 0
-  ? initializeApp({
-      credential: isConfigured ? cert(firebaseAdminConfig as any) : undefined,
+let app;
+try {
+  if (getApps().length === 0) {
+    let credential;
+    if (isConfigured) {
+      try {
+        credential = cert(firebaseAdminConfig as any);
+      } catch (certErr) {
+        console.error("⚠️ Failed to parse Firebase Admin credentials in cert():", certErr);
+      }
+    }
+    app = initializeApp({
+      credential,
       projectId: firebaseAdminConfig.projectId || 'mock-project-id-placeholder',
-    })
-  : getApp();
+    });
+  } else {
+    app = getApp();
+  }
+} catch (err) {
+  console.error("⚠️ Top-level Firebase Admin SDK initialization failed:", err);
+  // Safe fallback to prevent Next.js import-time crashes
+  app = getApps().length === 0 
+    ? initializeApp({ projectId: firebaseAdminConfig.projectId || 'mock-project-id-placeholder' }) 
+    : getApp();
+}
 
 export const db = getFirestore(app);
 export const adminAuth = getAuth(app);
