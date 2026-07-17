@@ -43,7 +43,8 @@ export function segmentChinese(text: string | null | undefined): Token[] {
   while (i < text.length) {
     const char = text[i];
 
-    if (/[\s\p{P}\p{S}\p{N}a-zA-Z]/u.test(char)) {
+    // Safe Chinese character boundary check matching both local and Vercel environments
+    if (!/[\u4e00-\u9fa5]/u.test(char)) {
       tokens.push({ text: char, isWord: false });
       i++;
       continue;
