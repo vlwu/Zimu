@@ -10,23 +10,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
     }
 
-    // 1. Load dictionary.json
+    // 1. Load dictionary.json (with fallback if missing on Vercel)
     const filePath = path.join(process.cwd(), 'data/dictionary.json');
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'Dictionary file not found' }, { status: 500 });
+    let dictionary: Record<string, any> = {};
+    
+    if (fs.existsSync(filePath)) {
+      try {
+        const rawData = fs.readFileSync(filePath, 'utf8');
+        dictionary = JSON.parse(rawData);
+      } catch (err) {
+        console.error('Failed to parse dictionary.json:', err);
+      }
+    } else {
+      console.warn(`⚠️ Warning: Compiled dictionary not found at "${filePath}". Running in offline mode.`);
     }
-
-    const rawData = fs.readFileSync(filePath, 'utf8');
-    const dictionary = JSON.parse(rawData);
 
     // 2. Combine knownWords and words up to targetHskLevel
     const eligibleWords = new Set<string>();
 
-    // Add known words to the pool
+    // Add known words to the pool (always add, even if dictionary is offline)
     for (const word of knownWords) {
-      if (dictionary[word]) {
-        eligibleWords.add(word);
-      }
+      eligibleWords.add(word);
     }
 
     // Add dictionary words up to targetHskLevel
@@ -74,13 +78,13 @@ export async function POST(request: Request) {
     // Add due cards
     for (const card of dueCards) {
       if (selectedCardsList.length >= limit) break;
-      const dictEntry = dictionary[card.word];
+      const dictEntry = dictionary[card.word] || {};
       selectedCardsList.push({
         word: card.word,
         traditional: dictEntry.t || card.word,
-        pinyin: dictEntry.p,
-        definition: dictEntry.d,
-        hsk: dictEntry.h,
+        pinyin: dictEntry.p || '',
+        definition: dictEntry.d || 'Definition not found (dictionary offline)',
+        hsk: dictEntry.h || null,
         progress: {
           interval: card.interval,
           repetition: card.repetition,
@@ -96,13 +100,13 @@ export async function POST(request: Request) {
       const shuffledNew = [...newCards].sort(() => 0.5 - Math.random());
       for (const word of shuffledNew) {
         if (selectedCardsList.length >= limit) break;
-        const dictEntry = dictionary[word];
+        const dictEntry = dictionary[word] || {};
         selectedCardsList.push({
           word,
           traditional: dictEntry.t || word,
-          pinyin: dictEntry.p,
-          definition: dictEntry.d,
-          hsk: dictEntry.h,
+          pinyin: dictEntry.p || '',
+          definition: dictEntry.d || 'Definition not found (dictionary offline)',
+          hsk: dictEntry.h || null,
           progress: null, // Indicates a new card
         });
       }

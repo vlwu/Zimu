@@ -15,10 +15,17 @@ function getDictionary(): Record<string, DictionaryEntry> {
   if (!cachedDict) {
     const filePath = path.join(process.cwd(), 'data/dictionary.json');
     if (!fs.existsSync(filePath)) {
-      throw new Error(`Compiled dictionary not found at "${filePath}". Please run "node scripts/compile-data.js" first.`);
+      console.warn(`⚠️ Warning: Compiled dictionary not found at "${filePath}". Running in fallback character-segmentation mode.`);
+      cachedDict = {};
+    } else {
+      try {
+        const rawData = fs.readFileSync(filePath, 'utf8');
+        cachedDict = JSON.parse(rawData);
+      } catch (err) {
+        console.error("⚠️ Failed to parse dictionary.json:", err);
+        cachedDict = {};
+      }
     }
-    const rawData = fs.readFileSync(filePath, 'utf8');
-    cachedDict = JSON.parse(rawData);
   }
   return cachedDict!;
 }
